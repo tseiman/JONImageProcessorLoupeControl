@@ -7,7 +7,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     public sealed class OpenWebConfigCommand : PluginDynamicCommand
     {
         public OpenWebConfigCommand()
-            : base(groupName: "Configurations", displayName: "Open Web Configuration", description: "Opens the JON Image Processor gateway configuration")
+            : base(groupName: "Configurations", displayName: "Open Web Config", description: "Opens the JONImageProcessor gateway configuration")
         {
         }
 
