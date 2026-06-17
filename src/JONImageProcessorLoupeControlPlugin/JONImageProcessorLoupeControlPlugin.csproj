@@ -11,7 +11,8 @@
 
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <OutputPath>..\..\bin\$(Configuration)\mac</OutputPath>
+    <OutputPath Condition="$(OS) == 'Windows_NT'">..\..\bin\$(Configuration)\win</OutputPath>
+    <OutputPath Condition="$(OS) != 'Windows_NT'">../../bin/$(Configuration)/mac</OutputPath>
 
     <PluginApiDir Condition="$(OS) == 'Windows_NT'">C:\Program Files\Logi\LogiPluginService\</PluginApiDir>
     <PluginApiDir Condition="$(OS) != 'Windows_NT'">/Applications/Utilities/LogiPluginService.app/Contents/MonoBundle/</PluginApiDir>
@@ -57,7 +58,7 @@
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <PropertyGroup>
-      <PluginLinkTarget>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(OutputPath)..'))</PluginLinkTarget>
+      <PluginLinkTarget>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../../bin/$(Configuration)'))</PluginLinkTarget>
     </PropertyGroup>
     <Exec Condition="$(OS) == 'Windows_NT'" Command="echo $(PluginLinkTarget) &gt; &quot;$(PluginDir)$(ProjectName).link&quot;" />
     <Exec Condition="$(OS) != 'Windows_NT'" Command="echo $(PluginLinkTarget) &gt; $(PluginDir)$(ProjectName).link" />

@@ -15,6 +15,7 @@ copyright: Copyright (c) 2026 tseiman. All rights reserved.
 # PLUGIN PROPERTIES
 # ==================================================================================================
 
+pluginFolderWin: win
 pluginFolderMac: mac
 
 supportedDevices:

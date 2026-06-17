@@ -41,4 +41,4 @@ The project expects the Loupedeck SDK files in the same locations as the referen
 * Windows: `C:\Program Files\Logi\LogiPluginService\PluginApi.dll`
 * macOS: `/Applications/Utilities/LogiPluginService.app/Contents/MonoBundle/PluginApi.dll`
 
-Successful builds write the plugin output to `bin/Debug/mac` or `bin/Release/mac` and create the Loupedeck `.link` file in the local Logi Plugin Service plugin folder.
+Successful builds write the plugin output to `bin/Debug/win` or `bin/Debug/mac`, depending on the build host, and create the Loupedeck `.link` file in the local Logi Plugin Service plugin folder. The `.link` file points to `bin/Debug` or `bin/Release`; that directory must contain `metadata/LoupedeckPackage.yaml` plus the platform folder containing the plugin DLL.
