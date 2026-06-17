@@ -34,8 +34,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
 
         public Boolean IsConnected { get; private set; }
 
-        public Boolean? CameraEnabled => this.GetBoolean("camera.enabled");
-
         public void Start(JonGatewayConfiguration configuration)
         {
             this._isStarted = true;
@@ -60,22 +58,21 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             }
         }
 
-        public async Task SetCameraEnabledAsync(Boolean enabled)
+        public async Task SetValueAsync(String key, Object value)
         {
             await this.SendIpcAsync(new JsonObject
             {
                 ["cmd"] = "set",
-                ["key"] = "camera.enabled",
-                ["value"] = enabled
+                ["key"] = key,
+                ["value"] = JsonSerializer.SerializeToNode(value, JsonOptions)
             }).ConfigureAwait(false);
 
-            await this.PollAsync().ConfigureAwait(false);
+            await this.RefreshAsync().ConfigureAwait(false);
         }
 
-        public async Task ToggleCameraEnabledAsync()
+        public Task RefreshAsync()
         {
-            var current = this.CameraEnabled ?? false;
-            await this.SetCameraEnabledAsync(!current).ConfigureAwait(false);
+            return this.PollAsync();
         }
 
         private async Task PollAsync()
@@ -285,7 +282,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             return value.ToJsonString(JsonOptions);
         }
 
-        private Boolean? GetBoolean(String key)
+        public Boolean? GetBoolean(String key)
         {
             lock (this._stateLock)
             {

@@ -5,6 +5,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using System.Text.Json.Nodes;
 
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
+    using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
     using LoupedeckWebConfigLib;
 
@@ -20,6 +21,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         internal static JonGatewayClient GatewayClient { get; private set; } = new();
 
+        internal static JonCameraControl CameraControl { get; private set; } = new(GatewayClient);
+
         internal static event Action PluginReady;
 
         public JONImageProcessorLoupeControlPlugin()
@@ -32,6 +35,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override void Load()
         {
             GatewayClient = new JonGatewayClient();
+            CameraControl = new JonCameraControl(GatewayClient);
             var configuration = this.LoadGatewayConfiguration();
             this.ConfigureWebConfig(configuration);
             GatewayClient.Start(configuration);

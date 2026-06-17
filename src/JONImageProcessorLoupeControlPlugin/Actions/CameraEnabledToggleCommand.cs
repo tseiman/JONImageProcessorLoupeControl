@@ -3,6 +3,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using System;
 
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
+    using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
 
     public sealed class CameraEnabledToggleCommand : PluginDynamicCommand
@@ -14,18 +15,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             JONImageProcessorLoupeControlPlugin.PluginReady += this.OnPluginReady;
         }
 
-        private JonGatewayClient GatewayClient => JONImageProcessorLoupeControlPlugin.GatewayClient;
+        private JonCameraControl CameraControl => JONImageProcessorLoupeControlPlugin.CameraControl;
 
         private void OnPluginReady()
         {
-            this.GatewayClient.StateChanged += this.OnGatewayStateChanged;
-            this.GatewayClient.ConnectionChanged += _ => this.ActionImageChanged();
+            this.CameraControl.StateChanged += this.OnGatewayStateChanged;
+            this.CameraControl.ConnectionChanged += _ => this.ActionImageChanged();
             this.ActionImageChanged();
         }
 
         protected override void RunCommand(String actionParameter)
         {
-            if (!this.GatewayClient.IsConnected)
+            if (!this.CameraControl.IsConnected)
             {
                 PluginLog.Verbose("[CameraEnabledToggleCommand] ignoring toggle because gateway is disconnected");
                 this.ActionImageChanged();
@@ -39,7 +40,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             try
             {
-                await this.GatewayClient.ToggleCameraEnabledAsync().ConfigureAwait(false);
+                await this.CameraControl.ToggleEnabledAsync().ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -53,7 +54,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         private void OnGatewayStateChanged(Object sender, JonGatewayStateChangedEventArgs e)
         {
-            if (e.Values.ContainsKey("camera.enabled"))
+            if (e.Values.ContainsKey(JonCameraControl.EnabledKey))
             {
                 this.ActionImageChanged();
             }
@@ -62,20 +63,20 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         protected override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
-            var enabled = this.GatewayClient.CameraEnabled == true;
-            var background = !this.GatewayClient.IsConnected
+            var enabled = this.CameraControl.Enabled == true;
+            var background = !this.CameraControl.IsConnected
                 ? Colors.DisabledBackground
                 : enabled ? Colors.Green : Colors.Red;
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
 
             var text = enabled ? "Camera\nON" : "Camera\nOFF";
-            var textColor = this.GatewayClient.IsConnected ? BitmapColor.White : Colors.DisabledText;
+            var textColor = this.CameraControl.IsConnected ? BitmapColor.White : Colors.DisabledText;
             ButtonVisuals.DrawText(bitmapBuilder, text, textColor);
 
             return bitmapBuilder.ToImage();
         }
 
         protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
-            => this.GatewayClient.CameraEnabled == true ? "Camera ON" : "Camera OFF";
+            => this.CameraControl.Enabled == true ? "Camera ON" : "Camera OFF";
     }
 }
