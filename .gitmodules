@@ -1,0 +1,3 @@
+[submodule "LoupedeckWebConfigLib"]
+	path = LoupedeckWebConfigLib
+	url = https://github.com/tseiman/LoupedeckWebConfigLib.git
