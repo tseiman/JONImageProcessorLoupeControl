@@ -24,6 +24,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         private CancellationTokenSource _lifetime = new();
         private Timer _pollTimer;
         private JonGatewayConfiguration _configuration = new();
+        private Boolean _isStarted;
 
         public event EventHandler<JonGatewayStateChangedEventArgs> StateChanged;
 
@@ -35,25 +36,22 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
 
         public void Start(JonGatewayConfiguration configuration)
         {
-            this.ApplyConfiguration(configuration);
+            this._isStarted = true;
+            this._configuration = configuration ?? new JonGatewayConfiguration();
+            this.RestartWebSocket();
+            _ = this.PollAsync();
             this._pollTimer = new Timer(_ => _ = this.PollAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
         }
 
         public void ApplyConfiguration(JonGatewayConfiguration configuration)
         {
             this._configuration = configuration ?? new JonGatewayConfiguration();
-            this._httpClient.BaseAddress = this._configuration.HttpBaseUri;
-            this._httpClient.DefaultRequestHeaders.Authorization = String.IsNullOrWhiteSpace(this._configuration.ApiToken)
-                ? null
-                : new AuthenticationHeaderValue("Bearer", this._configuration.ApiToken);
-            this._httpClient.DefaultRequestHeaders.Remove("X-API-Token");
-            if (!String.IsNullOrWhiteSpace(this._configuration.ApiToken))
-            {
-                this._httpClient.DefaultRequestHeaders.Add("X-API-Token", this._configuration.ApiToken);
-            }
 
-            this.RestartWebSocket();
-            _ = this.PollAsync();
+            if (this._isStarted)
+            {
+                this.RestartWebSocket();
+                _ = this.PollAsync();
+            }
         }
 
         public async Task SetCameraEnabledAsync(Boolean enabled)
@@ -91,8 +89,12 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
 
         private async Task<JsonNode> SendIpcAsync(JsonObject request)
         {
+            var requestUri = new Uri(this._configuration.HttpBaseUri, "/api/ipc");
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri);
+            this.ApplyAuthHeaders(httpRequest);
             using var content = new StringContent(request.ToJsonString(JsonOptions), Encoding.UTF8, "application/json");
-            using var response = await this._httpClient.PostAsync("/api/ipc", content, this._lifetime.Token).ConfigureAwait(false);
+            httpRequest.Content = content;
+            using var response = await this._httpClient.SendAsync(httpRequest, this._lifetime.Token).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync(this._lifetime.Token).ConfigureAwait(false);
             var json = JsonNode.Parse(text);
             if (!response.IsSuccessStatusCode || json?["ok"]?.GetValue<Boolean>() == false)
@@ -102,6 +104,17 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             }
 
             return json;
+        }
+
+        private void ApplyAuthHeaders(HttpRequestMessage request)
+        {
+            if (String.IsNullOrWhiteSpace(this._configuration.ApiToken))
+            {
+                return;
+            }
+
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", this._configuration.ApiToken);
+            request.Headers.Add("X-API-Token", this._configuration.ApiToken);
         }
 
         private void RestartWebSocket()
