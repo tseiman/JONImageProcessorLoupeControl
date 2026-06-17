@@ -43,7 +43,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
             catch (Exception ex)
             {
-                PluginLog.Warning(ex, "[CameraEnabledToggleCommand] toggle failed");
+                PluginLog.Warning($"[CameraEnabledToggleCommand] toggle failed: {ex.Message}");
             }
             finally
             {

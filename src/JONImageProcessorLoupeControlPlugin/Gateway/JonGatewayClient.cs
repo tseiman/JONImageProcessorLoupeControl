@@ -19,12 +19,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
     {
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly Object _stateLock = new();
+        private readonly Object _connectionLock = new();
         private readonly HttpClient _httpClient = new();
         private Dictionary<String, Object> _values = new(StringComparer.Ordinal);
         private CancellationTokenSource _lifetime = new();
         private Timer _pollTimer;
         private JonGatewayConfiguration _configuration = new();
         private Boolean _isStarted;
+        private Boolean _hasReportedConnectionState;
 
         public event EventHandler<JonGatewayStateChangedEventArgs> StateChanged;
 
@@ -46,6 +48,10 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         public void ApplyConfiguration(JonGatewayConfiguration configuration)
         {
             this._configuration = configuration ?? new JonGatewayConfiguration();
+            lock (this._connectionLock)
+            {
+                this._hasReportedConnectionState = false;
+            }
 
             if (this._isStarted)
             {
@@ -82,8 +88,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             }
             catch (Exception ex)
             {
-                this.SetConnected(false);
-                PluginLog.Warning(ex, "[JonGatewayClient] poll failed");
+                this.SetConnected(false, DescribeConnectivityFailure(ex));
             }
         }
 
@@ -144,10 +149,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                 catch (OperationCanceledException)
                 {
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    this.SetConnected(false);
-                    PluginLog.Warning(ex, "[JonGatewayClient] websocket failed");
                 }
 
                 if (!token.IsCancellationRequested)
@@ -303,15 +306,44 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             }
         }
 
-        private void SetConnected(Boolean connected)
+        private void SetConnected(Boolean connected, String reason = null)
         {
-            if (this.IsConnected == connected)
+            lock (this._connectionLock)
             {
-                return;
+                if (this._hasReportedConnectionState && this.IsConnected == connected)
+                {
+                    return;
+                }
+
+                this._hasReportedConnectionState = true;
+                this.IsConnected = connected;
+                if (connected)
+                {
+                    PluginLog.Info($"[JonGatewayClient] connected to {this._configuration.NormalizedGatewayBaseUrl}");
+                }
+                else
+                {
+                    PluginLog.Warning($"[JonGatewayClient] gateway unavailable at {this._configuration.NormalizedGatewayBaseUrl}: {reason ?? "not reachable"}");
+                }
+
+                this.ConnectionChanged?.Invoke(connected);
+            }
+        }
+
+        private static String DescribeConnectivityFailure(Exception ex)
+        {
+            if (ex is OperationCanceledException)
+            {
+                return "operation canceled";
             }
 
-            this.IsConnected = connected;
-            this.ConnectionChanged?.Invoke(connected);
+            var root = ex;
+            while (root.InnerException != null)
+            {
+                root = root.InnerException;
+            }
+
+            return root.Message;
         }
 
         public void Dispose()
