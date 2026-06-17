@@ -64,8 +64,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             using var bitmapBuilder = new BitmapBuilder(imageSize);
             var enabled = this.GatewayClient.CameraEnabled == true;
             var background = !this.GatewayClient.IsConnected
-                ? Colors.DisabledBackground
-                : enabled ? Colors.Green : Colors.Black;
+                ? Colors.DisabledBackgrounds
+                : enabled ? Colors.Green : Colors.Red;
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
 
             var text = enabled ? "Camera\nON" : "Camera\nOFF";
