@@ -25,6 +25,13 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         protected override void RunCommand(String actionParameter)
         {
+            if (!this.GatewayClient.IsConnected)
+            {
+                PluginLog.Verbose("[CameraEnabledToggleCommand] ignoring toggle because gateway is disconnected");
+                this.ActionImageChanged();
+                return;
+            }
+
             _ = this.ToggleAsync();
         }
 
@@ -56,7 +63,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
             var enabled = this.GatewayClient.CameraEnabled == true;
-            var background = enabled ? Colors.Green : Colors.Black;
+            var background = !this.GatewayClient.IsConnected
+                ? Colors.DisabledBackground
+                : enabled ? Colors.Green : Colors.Black;
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
 
             var text = enabled ? "Camera\nON" : "Camera\nOFF";
