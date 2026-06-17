@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>Loupedeck.JONImageProcessorLoupeControlPlugin</RootNamespace>
+
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <OutputPath>..\..\bin\$(Configuration)\mac</OutputPath>
+
+    <PluginApiDir Condition="$(OS) == 'Windows_NT'">C:\Program Files\Logi\LogiPluginService\</PluginApiDir>
+    <PluginApiDir Condition="$(OS) != 'Windows_NT'">/Applications/Utilities/LogiPluginService.app/Contents/MonoBundle/</PluginApiDir>
+
+    <PluginDir Condition="$(OS) == 'Windows_NT'">$(LocalAppData)\Logi\LogiPluginService\Plugins\</PluginDir>
+    <PluginDir Condition="$(OS) != 'Windows_NT'">~/Library/Application\ Support/Logi/LogiPluginService/Plugins/</PluginDir>
+
+    <WebConfigLibProject>..\..\LoupedeckWebConfigLib\LoupedeckWebConfigLib\LoupedeckWebConfigLib.csproj</WebConfigLibProject>
+    <WebConfigLibWwwRoot>..\..\LoupedeckWebConfigLib\LoupedeckWebConfigLib\wwwroot\**\*</WebConfigLibWwwRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="PluginApi">
+      <HintPath>$(PluginApiDir)PluginApi.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(WebConfigLibProject)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\*.html" />
+    <Content Include="$(WebConfigLibWwwRoot)">
+      <Link>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <Target Name="VerifyWebConfigLibReference" BeforeTargets="ResolveReferences" Condition="!Exists('$(MSBuildProjectDirectory)\$(WebConfigLibProject)')">
+    <Error Text="LoupedeckWebConfigLib project not found. Initialize the submodule at 'LoupedeckWebConfigLib'. Expected: $(WebConfigLibProject)" />
+  </Target>
+
+  <Target Name="SetGitVersion" BeforeTargets="GenerateAssemblyInfo">
+    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)&quot; rev-parse --short HEAD" ConsoleToMSBuild="true" IgnoreExitCode="true">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitVersion" />
+    </Exec>
+    <PropertyGroup>
+      <GitVersion Condition="'$(GitVersion)' == ''">unknown</GitVersion>
+      <InformationalVersion>$(Version)+$(GitVersion)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <PropertyGroup>
+      <PluginLinkTarget>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(OutputPath)..'))</PluginLinkTarget>
+    </PropertyGroup>
+    <Exec Condition="$(OS) == 'Windows_NT'" Command="echo $(PluginLinkTarget) &gt; &quot;$(PluginDir)$(ProjectName).link&quot;" />
+    <Exec Condition="$(OS) != 'Windows_NT'" Command="echo $(PluginLinkTarget) &gt; $(PluginDir)$(ProjectName).link" />
+  </Target>
+
+  <Target Name="CopyMetadata" AfterTargets="PostBuildEvent">
+    <ItemGroup>
+      <MetadataFiles Include="metadata\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(MetadataFiles)" DestinationFolder="$(OutputPath)/../metadata" />
+  </Target>
+
+  <Target Name="PluginClean" AfterTargets="CoreClean">
+    <Delete Condition="$(OS) == 'Windows_NT'" Files="$(PluginDir)$(ProjectName).link" />
+    <Exec Condition="$(OS) != 'Windows_NT'" Command="rm -f $(PluginDir)$(ProjectName).link" />
+    <RemoveDir Directories="$(OutputPath)/../metadata" />
+  </Target>
+</Project>

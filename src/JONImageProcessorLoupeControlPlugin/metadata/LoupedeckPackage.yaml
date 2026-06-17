@@ -1,0 +1,32 @@
+# ==================================================================================================
+# GENERAL SETTINGS
+# ==================================================================================================
+
+type: plugin4
+name: JONImageProcessorLoupeControl
+displayName: JON Image Processor
+description: Controls JONImageProcessor through JONImageProcessor-Gateway
+pluginFileName: JONImageProcessorLoupeControlPlugin.dll
+version: 0.1
+author: tseiman
+copyright: Copyright (c) 2026 tseiman. All rights reserved.
+
+# ==================================================================================================
+# PLUGIN PROPERTIES
+# ==================================================================================================
+
+pluginFolderMac: mac
+
+supportedDevices:
+    - LoupedeckCtFamily
+
+pluginCapabilities:
+
+minimumLoupedeckVersion: 6.0
+
+# ==================================================================================================
+# LOUPEDECK MARKETPLACE SETTINGS
+# ==================================================================================================
+
+license: MIT
+licenseUrl: https://opensource.org/licenses/MIT

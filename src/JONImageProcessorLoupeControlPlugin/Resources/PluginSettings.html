@@ -1,0 +1,11 @@
+<label>
+  Gateway URL or host
+  <input lwcl-config-key="gatewayBaseUrl" lwcl-default="http://127.0.0.1:8080" lwcl-check-regex="^(https?://)?[A-Za-z0-9._:-]{1,255}$">
+</label>
+<label>
+  Gateway API token
+  <input type="password" lwcl-config-key="apiToken" lwcl-default="" lwcl-check-regex=".{1,255}">
+</label>
+<script>
+  window.registerLoupedeckPluginAutoConfig();
+</script>
