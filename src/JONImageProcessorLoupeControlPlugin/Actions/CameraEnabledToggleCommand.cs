@@ -9,7 +9,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     public sealed class CameraEnabledToggleCommand : PluginDynamicCommand
     {
         public CameraEnabledToggleCommand()
-            : base(groupName: "Camera", displayName: "Camera ON/OFF", description: "Toggles camera.enabled through JONImageProcessor-Gateway")
+            : base(groupName: "Input", displayName: "Camera ON/OFF", description: "Toggles camera.enabled through JONImageProcessor-Gateway")
         {
             this.IsWidget = true;
             JONImageProcessorLoupeControlPlugin.PluginReady += this.OnPluginReady;
