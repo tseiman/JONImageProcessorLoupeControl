@@ -11,7 +11,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
     public sealed class MaskDynamicFolder : PluginDynamicFolder
     {
-        private static readonly String MaskEnabledToggleActionName = typeof(MaskEnabledToggleCommand).FullName;
+        private const String ToggleMaskCommand = "\u200B";
         private const String CommitMorphologyCommand = "commit-morphology";
         private const String NoopThresholdCommand = "noop-threshold";
         private const String NoopSmoothingCommand = "noop-smoothing";
@@ -71,7 +71,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.EnsureActiveFolderState();
             return new[]
             {
-                MaskEnabledToggleActionName,
+                this.CreateCommandName(ToggleMaskCommand),
                 PluginDynamicFolder.NavigateUpActionName
             };
         }
@@ -100,6 +100,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override void RunCommand(String actionParameter)
         {
+            if (actionParameter == ToggleMaskCommand)
+            {
+                if (this._maskControl?.IsConnected != true)
+                {
+                    this.RefreshAllActions();
+                    return;
+                }
+
+                _ = this.ToggleMaskAsync();
+                return;
+            }
+
             if (actionParameter == CommitMorphologyCommand)
             {
                 if (this._maskControl?.IsConnected == true)
@@ -169,6 +181,11 @@ public override String GetCommandDisplayName(String actionParameter, PluginImage
 
         public override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize)
         {
+            if (actionParameter == ToggleMaskCommand)
+            {
+                return MaskEnabledToggleCommand.CreateCommandImage(this._maskControl, imageSize);
+            }
+
             if (actionParameter == CommitMorphologyCommand)
             {
                 using var bitmapBuilder = new BitmapBuilder(imageSize);
@@ -208,6 +225,22 @@ public override String GetCommandDisplayName(String actionParameter, PluginImage
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
             ButtonVisuals.DrawText(bitmapBuilder, this.GetAdjustmentDisplayName(actionParameter, imageSize), BitmapColor.White);
             return bitmapBuilder.ToImage();
+        }
+
+        private async System.Threading.Tasks.Task ToggleMaskAsync()
+        {
+            try
+            {
+                await this._maskControl.ToggleMaskEnabledAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Warning($"[MaskDynamicFolder] mask toggle failed: {ex.Message}");
+            }
+            finally
+            {
+                this.RefreshAllActions();
+            }
         }
 
         private async System.Threading.Tasks.Task SetThresholdAsync(Double value)
