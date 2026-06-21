@@ -26,6 +26,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         internal static JonPresetControl PresetControl { get; private set; } = new(GatewayClient);
 
+        internal static JonMaskControl MaskControl { get; private set; } = new(GatewayClient);
+
         internal static event Action PluginReady;
 
         public JONImageProcessorLoupeControlPlugin()
@@ -40,6 +42,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             GatewayClient = new JonGatewayClient();
             CameraControl = new JonCameraControl(GatewayClient);
             PresetControl = new JonPresetControl(GatewayClient);
+            MaskControl = new JonMaskControl(GatewayClient);
             this.RegisterServices();
             var configuration = this.LoadGatewayConfiguration();
             this.ConfigureWebConfig(configuration);
@@ -65,6 +68,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             ServiceDirectory.Register(new MultiWheelFnState());
             ServiceDirectory.Register(new MultiWheelDispatch());
             ServiceDirectory.Register(PresetControl);
+            ServiceDirectory.Register(MaskControl);
             ServiceDirectory.Register(new PresetScrollAdjustment(PresetControl));
         }
 

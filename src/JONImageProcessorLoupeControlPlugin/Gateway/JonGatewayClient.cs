@@ -341,6 +341,41 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             }
         }
 
+        public Double? GetNumber(String key)
+        {
+            lock (this._stateLock)
+            {
+                if (!this._values.TryGetValue(key, out var value))
+                {
+                    return null;
+                }
+
+                return value switch
+                {
+                    Double number => number,
+                    Single number => number,
+                    Decimal number => (Double)number,
+                    Int64 integer => integer,
+                    Int32 integer => integer,
+                    String text when Double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) => parsed,
+                    _ => null
+                };
+            }
+        }
+
+        public String GetString(String key)
+        {
+            lock (this._stateLock)
+            {
+                if (!this._values.TryGetValue(key, out var value))
+                {
+                    return null;
+                }
+
+                return value?.ToString();
+            }
+        }
+
         private void SetConnected(Boolean connected, String reason = null)
         {
             lock (this._connectionLock)
