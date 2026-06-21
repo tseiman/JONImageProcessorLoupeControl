@@ -28,6 +28,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         private Boolean _isStarted;
         private Boolean _hasReportedConnectionState;
 
+        public JonGatewayClient()
+        {
+            this._httpClient.Timeout = TimeSpan.FromMilliseconds(900);
+        }
+
         public event EventHandler<JonGatewayStateChangedEventArgs> StateChanged;
 
         public event Action<Boolean> ConnectionChanged;
@@ -66,6 +71,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                 ["key"] = key,
                 ["value"] = JsonSerializer.SerializeToNode(value, JsonOptions)
             }).ConfigureAwait(false);
+
+            this.ApplyState(new JsonObject
+            {
+                [key] = JsonSerializer.SerializeToNode(value, JsonOptions)
+            });
 
             await this.RefreshAsync().ConfigureAwait(false);
         }

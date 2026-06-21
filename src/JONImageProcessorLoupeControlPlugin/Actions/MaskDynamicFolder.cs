@@ -66,17 +66,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override PluginDynamicFolderNavigation GetNavigationArea(DeviceType deviceType) =>
             PluginDynamicFolderNavigation.None;
 
-        public override BitmapImage GetButtonImage(PluginImageSize imageSize)
-        {
-            this.AttachMaskControl();
-
-            var connected = this._maskControl?.IsConnected == true;
-            using var bitmapBuilder = new BitmapBuilder(imageSize);
-            ButtonVisuals.FillBackground(bitmapBuilder, imageSize, connected ? BitmapColor.Black : Colors.DisabledBackground);
-            ButtonVisuals.DrawText(bitmapBuilder, "Mask", connected ? BitmapColor.White : Colors.DisabledText);
-            return bitmapBuilder.ToImage();
-        }
-
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType deviceType)
         {
             this.EnsureActiveFolderState();
@@ -443,7 +432,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             var connected = maskControl?.IsConnected == true;
             var enabled = maskControl?.MaskEnabled == true;
-            var background = connected ? BitmapColor.Black : Colors.DisabledBackground;
             var status = !connected
                 ? Colors.DisabledBackground
                 : enabled ? Colors.Green : Colors.Red;
@@ -454,9 +442,28 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             var markerHeight = Math.Max(6, height / 4);
             var markerInset = Math.Max(2, width / 8);
 
-            bitmapBuilder.FillRectangle(0, 0, width, height, background);
-            bitmapBuilder.FillRectangle(markerInset, 0, width - (markerInset * 2), markerHeight, status);
+            bitmapBuilder.FillRectangle(0, 0, width, height, BitmapColor.Black);
+            DrawRoundedTopMarker(bitmapBuilder, width, markerHeight, markerInset, status);
             return bitmapBuilder.ToImage();
+        }
+
+        private static void DrawRoundedTopMarker(BitmapBuilder bitmapBuilder, Int32 width, Int32 height, Int32 inset, BitmapColor color)
+        {
+            var radius = Math.Max(2, height / 2);
+            for (var y = 0; y < height; y++)
+            {
+                var lowerCurve = y >= height - radius;
+                var curveY = lowerCurve ? y - (height - radius) : 0;
+                var curveInset = lowerCurve
+                    ? (Int32)Math.Round(radius - Math.Sqrt(Math.Max(0, (radius * radius) - (curveY * curveY))))
+                    : 0;
+                var x = inset + curveInset;
+                var rowWidth = width - (x * 2);
+                if (rowWidth > 0)
+                {
+                    bitmapBuilder.FillRectangle(x, y, rowWidth, 1, color);
+                }
+            }
         }
 
         private static String Title(String value) =>
