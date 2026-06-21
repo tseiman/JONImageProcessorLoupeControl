@@ -64,7 +64,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         }
 
         public override PluginDynamicFolderNavigation GetNavigationArea(DeviceType deviceType) =>
-            PluginDynamicFolderNavigation.ButtonArea;
+            PluginDynamicFolderNavigation.None;
 
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType deviceType)
         {
