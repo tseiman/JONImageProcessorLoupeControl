@@ -64,6 +64,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override BitmapImage GetButtonImage(PluginImageSize imageSize)
         {
             this.AttachBackgroundControl();
+            if (!this.IsColorDraftPinned())
+            {
+                this._draftColor = this._backgroundControl?.OverlayRgba ?? this._draftColor;
+            }
+
             return DynamicFolderVisuals.CreateColorImage(this._draftColor, imageSize, this._backgroundControl?.IsConnected == true, "Color");
         }
 
@@ -186,12 +191,19 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 }
 
                 this.RefreshAllActions();
+                this.ActionImageChanged();
             }
         }
 
         private void OnBackgroundConnectionChanged(Boolean connected)
         {
+            if (connected && !this.IsColorDraftPinned())
+            {
+                this._draftColor = this._backgroundControl?.OverlayRgba ?? this._draftColor;
+            }
+
             this.RefreshAllActions();
+            this.ActionImageChanged();
         }
 
         private void RefreshAllActions()
@@ -283,6 +295,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                     {
                         this._draftColor = this._backgroundControl.OverlayRgba;
                         this.RefreshAllActions();
+                        this.ActionImageChanged();
                     }
                 }
             }

@@ -8,13 +8,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
-    using Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel;
 
-    public sealed class BackgroundDynamicFolder : PluginDynamicFolder, IBlinkenLightsReceiver, IMultiWheelDispatchable, IMultiWheelUploadCompletedHandler
+    public sealed class BackgroundDynamicFolder : PluginDynamicFolder
     {
         private const String EnableCommandPrefix = "background-enable";
         private const String LoopCommandPrefix = "background-loop";
-        private const String AssetSelectCommand = "background-asset-select";
         private const String CommitModeCommand = "commit-mode";
         private const String NoopBlurCommand = "noop-blur";
         private const String ModeAdjustment = "mode";
@@ -24,19 +22,12 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private static readonly String[] DefaultModeOptions = ["none", "color", "blur", "image"];
 
         private readonly Object _pollLock = new();
-        private readonly BitmapColor _blinkColor = new(0xff, 0xc0, 0x00);
         private JonBackgroundControl _backgroundControl;
-        private MultiWheelDispatch _multiWheelDispatch;
-        private MultiWheelFnState _fnState;
-        private BackgroundAssetScrollAdjustment _assetScrollAdjustment;
         private IReadOnlyList<String> _modeOptions = DefaultModeOptions;
         private String _draftMode = "none";
         private DateTime _lastModeDraftChangeUtc = DateTime.MinValue;
         private Timer _folderPollTimer;
         private Boolean _isPollingActive;
-        private Boolean _assetSelectActive;
-        private Boolean _assetSelectKeepActive;
-        private Boolean _blinkState = true;
 
         public BackgroundDynamicFolder()
         {
@@ -81,7 +72,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             return new[]
             {
                 this.CreateCommandName(this.GetEnableCommandParameter()),
-                this.CreateCommandName(AssetSelectCommand),
                 this.CreateCommandName(this.GetLoopCommandParameter()),
                 PluginDynamicFolder.NavigateUpActionName
             };
@@ -90,11 +80,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override IEnumerable<String> GetEncoderRotateActionNames(DeviceType deviceType)
         {
             this.EnsureActiveFolderState();
-            if (this._assetSelectActive)
-            {
-                return Array.Empty<String>();
-            }
-
             return new[]
             {
                 this.CreateAdjustmentName(ModeAdjustment),
@@ -105,11 +90,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override IEnumerable<String> GetEncoderPressActionNames(DeviceType deviceType)
         {
             this.EnsureActiveFolderState();
-            if (this._assetSelectActive)
-            {
-                return Array.Empty<String>();
-            }
-
             return new[]
             {
                 this.CreateCommandName(CommitModeCommand),
@@ -134,12 +114,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             if (IsLoopCommand(actionParameter))
             {
                 _ = this.ToggleLoopIfVideoAsync();
-                return;
-            }
-
-            if (actionParameter == AssetSelectCommand)
-            {
-                this.ToggleAssetSelect();
                 return;
             }
 
@@ -180,7 +154,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             {
                 _ when IsEnableCommand(actionParameter) => "Enable Background",
                 _ when IsLoopCommand(actionParameter) => "Loop Video",
-                AssetSelectCommand => "Background Asset",
                 CommitModeCommand => $"Set {Title(this._draftMode)}",
                 _ => null
             };
@@ -197,21 +170,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             if (IsLoopCommand(actionParameter))
             {
                 return DynamicFolderVisuals.CreateToggleImage(connected, this._backgroundControl?.LoopIfVideo == true, imageSize);
-            }
-
-            if (actionParameter == AssetSelectCommand)
-            {
-                var background = !connected
-                    ? Colors.DisabledBackground
-                    : this._assetSelectActive && this._assetSelectKeepActive
-                        ? Colors.Red
-                        : this._assetSelectActive && this._blinkState
-                            ? this._blinkColor
-                            : BitmapColor.Black;
-                using var bitmapBuilder = new BitmapBuilder(imageSize);
-                ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
-                ButtonVisuals.DrawText(bitmapBuilder, "Asset\nSelect", connected ? BitmapColor.White : Colors.DisabledText);
-                return bitmapBuilder.ToImage();
             }
 
             if (actionParameter == CommitModeCommand)
@@ -244,64 +202,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override BitmapImage GetAdjustmentImage(String actionParameter, PluginImageSize imageSize) =>
             DynamicFolderVisuals.CreateTextImage(this.GetAdjustmentDisplayName(actionParameter, imageSize), this._backgroundControl?.IsConnected == true, imageSize);
-
-        public void ReceiveTimeThick(Boolean blinkState)
-        {
-            this._blinkState = blinkState;
-            if (this._assetSelectActive)
-            {
-                this.ButtonActionNamesChanged();
-            }
-        }
-
-        public void Disengage()
-        {
-            if (!this._assetSelectActive)
-            {
-                return;
-            }
-
-            this._assetSelectActive = false;
-            this._assetSelectKeepActive = false;
-            this.EncoderActionNamesChanged();
-            this.ButtonActionNamesChanged();
-        }
-
-        public void UploadCompleted()
-        {
-            if (!this._assetSelectActive || this._assetSelectKeepActive)
-            {
-                this.ButtonActionNamesChanged();
-                return;
-            }
-
-            this._assetSelectActive = false;
-            this._multiWheelDispatch?.InformInActive(this);
-            this.EncoderActionNamesChanged();
-            this.ButtonActionNamesChanged();
-        }
-
-        private void ToggleAssetSelect()
-        {
-            if (this._assetSelectActive)
-            {
-                this._assetSelectActive = false;
-                this._assetSelectKeepActive = false;
-                this._fnState?.Disable();
-                this._multiWheelDispatch?.InformInActive(this);
-            }
-            else
-            {
-                this._assetSelectActive = true;
-                this._assetSelectKeepActive = this._fnState?.IsEnabled == true;
-                this._blinkState = true;
-                _ = this._assetScrollAdjustment?.ReloadAssetsAsync();
-                this._multiWheelDispatch?.InformActive(this);
-            }
-
-            this.EncoderActionNamesChanged();
-            this.ButtonActionNamesChanged();
-        }
 
         private async System.Threading.Tasks.Task ToggleBackgroundEnabledAsync()
         {
@@ -417,12 +317,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         private void OnBackgroundConnectionChanged(Boolean connected)
         {
-            if (!connected)
-            {
-                this.Disengage();
-                this._multiWheelDispatch?.InformInActive(this);
-            }
-
             this.RefreshAllActions();
         }
 
@@ -437,11 +331,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private void OnPluginReady()
         {
             this.AttachBackgroundControl();
-            this._multiWheelDispatch = ServiceDirectory.Get(ServiceDirectory.T_MultiWheelDispatch) as MultiWheelDispatch;
-            this._fnState = ServiceDirectory.Get(ServiceDirectory.T_MultiWheelFnState) as MultiWheelFnState;
-            this._assetScrollAdjustment = ServiceDirectory.Get(ServiceDirectory.T_BackgroundAssetScrollAdjustment) as BackgroundAssetScrollAdjustment;
-            this._multiWheelDispatch?.RegisterDispatchable(this, this._assetScrollAdjustment);
-            (ServiceDirectory.Get(ServiceDirectory.T_BlinkenLightsTimeSource) as BlinkenLightsTimeSource)?.RegisterBlinkenLightReceiver(this);
         }
 
         private void AttachBackgroundControl()
