@@ -66,6 +66,17 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override PluginDynamicFolderNavigation GetNavigationArea(DeviceType deviceType) =>
             PluginDynamicFolderNavigation.None;
 
+        public override BitmapImage GetButtonImage(PluginImageSize imageSize)
+        {
+            this.AttachMaskControl();
+
+            var connected = this._maskControl?.IsConnected == true;
+            using var bitmapBuilder = new BitmapBuilder(imageSize);
+            ButtonVisuals.FillBackground(bitmapBuilder, imageSize, connected ? BitmapColor.Black : Colors.DisabledBackground);
+            ButtonVisuals.DrawText(bitmapBuilder, "Mask", connected ? BitmapColor.White : Colors.DisabledText);
+            return bitmapBuilder.ToImage();
+        }
+
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType deviceType)
         {
             this.EnsureActiveFolderState();
@@ -153,44 +164,29 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
         }
 
-      //  public override String GetButtonDisplayName(PluginImageSize imageSize) => "Mask";
-
-// public override String GetButtonDisplayName(PluginImageSize imageSize) => null;
-
-     /*   public override BitmapImage GetButtonImage(PluginImageSize imageSize)
-        {
-            using var bitmapBuilder = new BitmapBuilder(imageSize);
-            ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
-            ButtonVisuals.DrawText(bitmapBuilder, "Mask", BitmapColor.White);
-            return bitmapBuilder.ToImage();
-        }
-*/
-
-public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) => null;
-
-    /*    public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
+        public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
         {
             return actionParameter switch
             {
-                ToggleMaskCommand => MaskEnabledToggleCommand.CreateDisplayName(this._maskControl),
-                CommitMorphologyCommand => $"Set\n{Title(this._draftMorphology)}",
+                ToggleMaskCommand => this._maskControl?.MaskEnabled == true ? "Mask ON" : "Mask OFF",
+                CommitMorphologyCommand => $"Set {Title(this._draftMorphology)}",
                 _ => null
             };
         }
-        */
 
         public override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize)
         {
             if (actionParameter == ToggleMaskCommand)
             {
-                return MaskEnabledToggleCommand.CreateCommandImage(this._maskControl, imageSize);
+                return CreateFolderToggleImage(this._maskControl, imageSize);
             }
 
             if (actionParameter == CommitMorphologyCommand)
             {
                 using var bitmapBuilder = new BitmapBuilder(imageSize);
-                ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
-                ButtonVisuals.DrawText(bitmapBuilder, $"Set\n{Title(this._draftMorphology)}", BitmapColor.White);
+                var connected = this._maskControl?.IsConnected == true;
+                ButtonVisuals.FillBackground(bitmapBuilder, imageSize, connected ? BitmapColor.Black : Colors.DisabledBackground);
+                ButtonVisuals.DrawText(bitmapBuilder, $"Set\n{Title(this._draftMorphology)}", connected ? BitmapColor.White : Colors.DisabledText);
                 return bitmapBuilder.ToImage();
             }
 
@@ -222,8 +218,9 @@ public override String GetCommandDisplayName(String actionParameter, PluginImage
         public override BitmapImage GetAdjustmentImage(String actionParameter, PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
-            ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
-            ButtonVisuals.DrawText(bitmapBuilder, this.GetAdjustmentDisplayName(actionParameter, imageSize), BitmapColor.White);
+            var connected = this._maskControl?.IsConnected == true;
+            ButtonVisuals.FillBackground(bitmapBuilder, imageSize, connected ? BitmapColor.Black : Colors.DisabledBackground);
+            ButtonVisuals.DrawText(bitmapBuilder, this.GetAdjustmentDisplayName(actionParameter, imageSize), connected ? BitmapColor.White : Colors.DisabledText);
             return bitmapBuilder.ToImage();
         }
 
@@ -441,6 +438,26 @@ public override String GetCommandDisplayName(String actionParameter, PluginImage
 
         private static String FormatUnitValue(Double value) =>
             value.ToString("0.000", CultureInfo.InvariantCulture);
+
+        private static BitmapImage CreateFolderToggleImage(JonMaskControl maskControl, PluginImageSize imageSize)
+        {
+            var connected = maskControl?.IsConnected == true;
+            var enabled = maskControl?.MaskEnabled == true;
+            var background = connected ? BitmapColor.Black : Colors.DisabledBackground;
+            var status = !connected
+                ? Colors.DisabledBackground
+                : enabled ? Colors.Green : Colors.Red;
+
+            using var bitmapBuilder = new BitmapBuilder(imageSize);
+            var width = imageSize.GetWidth();
+            var height = imageSize.GetHeight();
+            var markerHeight = Math.Max(6, height / 4);
+            var markerInset = Math.Max(2, width / 8);
+
+            bitmapBuilder.FillRectangle(0, 0, width, height, background);
+            bitmapBuilder.FillRectangle(markerInset, 0, width - (markerInset * 2), markerHeight, status);
+            return bitmapBuilder.ToImage();
+        }
 
         private static String Title(String value) =>
             String.IsNullOrWhiteSpace(value) ? "" : CultureInfo.InvariantCulture.TextInfo.ToTitleCase(value);
