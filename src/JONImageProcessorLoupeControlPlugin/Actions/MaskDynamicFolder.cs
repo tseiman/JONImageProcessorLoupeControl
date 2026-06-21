@@ -30,7 +30,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.GroupName = "JON Image Processor";
         }
 
-        public override void Load()
+        public override Boolean Load()
         {
             this._maskControl = JONImageProcessorLoupeControlPlugin.MaskControl;
             this._draftMorphology = this._maskControl?.Morphology ?? "light";
@@ -39,15 +39,19 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 this._maskControl.StateChanged += this.OnMaskStateChanged;
                 this._maskControl.ConnectionChanged += this.OnMaskConnectionChanged;
             }
+
+            return true;
         }
 
-        public override void Unload()
+        public override Boolean Unload()
         {
             if (this._maskControl != null)
             {
                 this._maskControl.StateChanged -= this.OnMaskStateChanged;
                 this._maskControl.ConnectionChanged -= this.OnMaskConnectionChanged;
             }
+
+            return true;
         }
 
         public override PluginDynamicFolderNavigation GetNavigationArea(DeviceType deviceType) =>
@@ -139,7 +143,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override String GetButtonDisplayName(PluginImageSize imageSize) => "Mask";
 
-        protected override BitmapImage GetButtonImage(PluginImageSize imageSize)
+        public override BitmapImage GetButtonImage(PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
