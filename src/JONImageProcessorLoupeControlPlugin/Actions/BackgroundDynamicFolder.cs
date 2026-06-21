@@ -90,6 +90,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override IEnumerable<String> GetEncoderRotateActionNames(DeviceType deviceType)
         {
             this.EnsureActiveFolderState();
+            if (this._assetSelectActive)
+            {
+                return Array.Empty<String>();
+            }
+
             return new[]
             {
                 this.CreateAdjustmentName(ModeAdjustment),
@@ -100,6 +105,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override IEnumerable<String> GetEncoderPressActionNames(DeviceType deviceType)
         {
             this.EnsureActiveFolderState();
+            if (this._assetSelectActive)
+            {
+                return Array.Empty<String>();
+            }
+
             return new[]
             {
                 this.CreateCommandName(CommitModeCommand),
@@ -253,6 +263,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
             this._assetSelectActive = false;
             this._assetSelectKeepActive = false;
+            this.EncoderActionNamesChanged();
             this.ButtonActionNamesChanged();
         }
 
@@ -266,6 +277,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
             this._assetSelectActive = false;
             this._multiWheelDispatch?.InformInActive(this);
+            this.EncoderActionNamesChanged();
             this.ButtonActionNamesChanged();
         }
 
@@ -287,6 +299,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 this._multiWheelDispatch?.InformActive(this);
             }
 
+            this.EncoderActionNamesChanged();
             this.ButtonActionNamesChanged();
         }
 

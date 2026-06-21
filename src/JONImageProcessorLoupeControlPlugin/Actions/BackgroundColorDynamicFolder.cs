@@ -10,16 +10,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
     public sealed class BackgroundColorDynamicFolder : PluginDynamicFolder
     {
-        private const String CommitColorCommand = "commit-color";
+        private const String CommitColorCommandPrefix = "commit-color";
         private const String RedAdjustment = "red";
         private const String GreenAdjustment = "green";
         private const String BlueAdjustment = "blue";
         private const String AlphaAdjustment = "alpha";
         private const Int32 ColorStep = 1;
+        private const Int32 ColorDraftHoldSeconds = 10;
 
         private readonly Object _pollLock = new();
         private JonBackgroundControl _backgroundControl;
         private BackgroundRgba _draftColor = new(0, 255, 0, 255);
+        private DateTime _lastColorDraftChangeUtc = DateTime.MinValue;
         private Timer _folderPollTimer;
         private Boolean _isPollingActive;
 
@@ -62,7 +64,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override BitmapImage GetButtonImage(PluginImageSize imageSize)
         {
             this.AttachBackgroundControl();
-            return DynamicFolderVisuals.CreateColorImage(this._backgroundControl?.OverlayRgba ?? this._draftColor, imageSize, this._backgroundControl?.IsConnected == true, "Color");
+            return DynamicFolderVisuals.CreateColorImage(this._draftColor, imageSize, this._backgroundControl?.IsConnected == true, "Color");
         }
 
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType deviceType)
@@ -70,7 +72,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.EnsureActiveFolderState();
             return new[]
             {
-                this.CreateCommandName(CommitColorCommand),
+                this.CreateCommandName(this.GetCommitColorCommandParameter()),
                 PluginDynamicFolder.NavigateUpActionName
             };
         }
@@ -89,7 +91,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override void RunCommand(String actionParameter)
         {
-            if (actionParameter == CommitColorCommand && this._backgroundControl?.IsConnected == true)
+            if (IsCommitColorCommand(actionParameter) && this._backgroundControl?.IsConnected == true)
             {
                 _ = this.CommitColorAsync();
             }
@@ -111,14 +113,15 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 AlphaAdjustment => this._draftColor.With(a: this._draftColor.A + delta),
                 _ => this._draftColor
             };
+            this._lastColorDraftChangeUtc = DateTime.UtcNow;
             this.RefreshAllActions();
         }
 
         public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) =>
-            actionParameter == CommitColorCommand ? "Apply Color" : null;
+            IsCommitColorCommand(actionParameter) ? "Apply Color" : null;
 
         public override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize) =>
-            actionParameter == CommitColorCommand
+            IsCommitColorCommand(actionParameter)
                 ? DynamicFolderVisuals.CreateColorImage(this._draftColor, imageSize, this._backgroundControl?.IsConnected == true)
                 : null;
 
@@ -154,6 +157,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             try
             {
                 await this._backgroundControl.SetOverlayRgbaAsync(this._draftColor).ConfigureAwait(false);
+                this._draftColor = this._backgroundControl.OverlayRgba;
+                this._lastColorDraftChangeUtc = DateTime.MinValue;
             }
             catch (Exception ex)
             {
@@ -169,7 +174,17 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             if (e.Values.ContainsKey(JonBackgroundControl.OverlayColorKey) || e.Values.ContainsKey(JonBackgroundControl.OverlayAlphaKey))
             {
-                this._draftColor = this._backgroundControl?.OverlayRgba ?? this._draftColor;
+                var gatewayColor = this._backgroundControl?.OverlayRgba ?? this._draftColor;
+                if (gatewayColor.ToHex().Equals(this._draftColor.ToHex(), StringComparison.Ordinal))
+                {
+                    this._lastColorDraftChangeUtc = DateTime.MinValue;
+                }
+                else if (!this.IsColorDraftPinned())
+                {
+                    this._draftColor = gatewayColor;
+                    this._lastColorDraftChangeUtc = DateTime.MinValue;
+                }
+
                 this.RefreshAllActions();
             }
         }
@@ -204,6 +219,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.DetachBackgroundControl();
             this._backgroundControl = JONImageProcessorLoupeControlPlugin.BackgroundControl;
             this._draftColor = this._backgroundControl?.OverlayRgba ?? this._draftColor;
+            this._lastColorDraftChangeUtc = DateTime.MinValue;
             if (this._backgroundControl == null)
             {
                 return;
@@ -263,11 +279,26 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 if (this._backgroundControl?.IsConnected == true)
                 {
                     await this._backgroundControl.RefreshAsync().ConfigureAwait(false);
+                    if (!this.IsColorDraftPinned())
+                    {
+                        this._draftColor = this._backgroundControl.OverlayRgba;
+                        this.RefreshAllActions();
+                    }
                 }
             }
             catch (Exception)
             {
             }
         }
+
+        private Boolean IsColorDraftPinned() =>
+            this._lastColorDraftChangeUtc != DateTime.MinValue
+            && (DateTime.UtcNow - this._lastColorDraftChangeUtc).TotalSeconds < ColorDraftHoldSeconds;
+
+        private String GetCommitColorCommandParameter() =>
+            $"{CommitColorCommandPrefix}-{this._draftColor.ToHex()}";
+
+        private static Boolean IsCommitColorCommand(String actionParameter) =>
+            actionParameter?.StartsWith(CommitColorCommandPrefix, StringComparison.Ordinal) == true;
     }
 }
