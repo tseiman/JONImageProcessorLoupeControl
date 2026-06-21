@@ -33,7 +33,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public MaskDynamicFolder()
         {
             this.DisplayName = "Mask";
-            this.GroupName = "JON Image Processor";
+            this.GroupName = "Mask";
         }
 
         public override Boolean Load()
@@ -153,17 +153,17 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
         }
 
-        public override String GetButtonDisplayName(PluginImageSize imageSize) => "Mask";
+      //  public override String GetButtonDisplayName(PluginImageSize imageSize) => "Mask";
 
-        public override BitmapImage GetButtonImage(PluginImageSize imageSize)
+     /*   public override BitmapImage GetButtonImage(PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
             ButtonVisuals.DrawText(bitmapBuilder, "Mask", BitmapColor.White);
             return bitmapBuilder.ToImage();
         }
-
-        public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
+*/
+    /*    public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
         {
             return actionParameter switch
             {
@@ -172,6 +172,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 _ => null
             };
         }
+        */
 
         public override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize)
         {
@@ -195,9 +196,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             return actionParameter switch
             {
-                ThresholdAdjustment => "Threshold",
-                SmoothingAdjustment => "Smoothing",
-                MorphologyAdjustment => "Morphology",
+                ThresholdAdjustment => "Thresh.",
+                SmoothingAdjustment => "Smth.",
+                MorphologyAdjustment => "Morph.",
                 _ => null
             };
         }

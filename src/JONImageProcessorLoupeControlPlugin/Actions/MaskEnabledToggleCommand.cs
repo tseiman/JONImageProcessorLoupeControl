@@ -22,17 +22,22 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             var background = maskControl?.IsConnected != true
                 ? Colors.DisabledBackground
                 : enabled ? Colors.Green : BitmapColor.Black;
-            ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
+          /*  ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
 
             var text = enabled ? "Mask\nON" : "Mask\nOFF";
             var textColor = maskControl?.IsConnected == true ? BitmapColor.White : Colors.DisabledText;
             ButtonVisuals.DrawText(bitmapBuilder, text, textColor);
 
+*/
+            var text = enabled ? "Mask\nON" : "Mask\nOFF";
+            var textColor = maskControl?.IsConnected == true ? BitmapColor.White : Colors.DisabledText;
+            bitmapBuilder.FillRectangle(0, 0, imageSize.GetWidth(), imageSize.GetHeight(), background);
+            bitmapBuilder.DrawText(text, textColor);
             return bitmapBuilder.ToImage();
         }
 
-        internal static String CreateDisplayName(JonMaskControl maskControl) =>
-            maskControl?.MaskEnabled == true ? "Mask ON" : "Mask OFF";
+//        internal static String CreateDisplayName(JonMaskControl maskControl) =>
+  //          maskControl?.MaskEnabled == true ? "Mask ON" : "Mask OFF";
 
         private JonMaskControl MaskControl => JONImageProcessorLoupeControlPlugin.MaskControl;
 
@@ -82,7 +87,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         protected override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize) =>
             CreateCommandImage(this.MaskControl, imageSize);
 
-        protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) =>
-            CreateDisplayName(this.MaskControl);
+protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) {
+ return "";   
+}
+
+       // protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) =>
+        //    CreateDisplayName(this.MaskControl);
     }
 }
