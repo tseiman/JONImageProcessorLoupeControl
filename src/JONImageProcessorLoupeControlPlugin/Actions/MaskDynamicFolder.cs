@@ -11,7 +11,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
     public sealed class MaskDynamicFolder : PluginDynamicFolder
     {
-        private const String ToggleMaskCommand = "\u200B";
+        private const String ToggleMaskCommandPrefix = "toggle-mask";
         private const String CommitMorphologyCommand = "commit-morphology";
         private const String NoopThresholdCommand = "noop-threshold";
         private const String NoopSmoothingCommand = "noop-smoothing";
@@ -71,7 +71,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.EnsureActiveFolderState();
             return new[]
             {
-                this.CreateCommandName(ToggleMaskCommand),
+                this.CreateCommandName(this.GetToggleMaskCommandParameter()),
                 PluginDynamicFolder.NavigateUpActionName
             };
         }
@@ -100,7 +100,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override void RunCommand(String actionParameter)
         {
-            if (actionParameter == ToggleMaskCommand)
+            if (IsToggleMaskCommand(actionParameter))
             {
                 if (this._maskControl?.IsConnected != true)
                 {
@@ -157,7 +157,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             return actionParameter switch
             {
-                ToggleMaskCommand => this._maskControl?.MaskEnabled == true ? "Mask ON" : "Mask OFF",
+                _ when IsToggleMaskCommand(actionParameter) => "Mask",
                 CommitMorphologyCommand => $"Set {Title(this._draftMorphology)}",
                 _ => null
             };
@@ -165,7 +165,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize)
         {
-            if (actionParameter == ToggleMaskCommand)
+            if (IsToggleMaskCommand(actionParameter))
             {
                 return CreateFolderToggleImage(this._maskControl, imageSize);
             }
@@ -432,36 +432,47 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             var connected = maskControl?.IsConnected == true;
             var enabled = maskControl?.MaskEnabled == true;
-            var status = !connected
+            var background = !connected
                 ? Colors.DisabledBackground
                 : enabled ? Colors.Green : Colors.Red;
+            var textColor = connected ? BitmapColor.White : Colors.DisabledText;
 
             using var bitmapBuilder = new BitmapBuilder(imageSize);
             var width = imageSize.GetWidth();
             var height = imageSize.GetHeight();
-            var markerHeight = Math.Max(6, height / 4);
-            var markerInset = Math.Max(2, width / 8);
 
             bitmapBuilder.FillRectangle(0, 0, width, height, BitmapColor.Black);
-            DrawRoundedTopMarker(bitmapBuilder, width, markerHeight, markerInset, status);
+            DrawRoundedRectangle(bitmapBuilder, 0, 0, width, height, Math.Max(4, Math.Min(width, height) / 6), background);
+            ButtonVisuals.DrawText(bitmapBuilder, enabled ? "ON" : "OFF", textColor);
             return bitmapBuilder.ToImage();
         }
 
-        private static void DrawRoundedTopMarker(BitmapBuilder bitmapBuilder, Int32 width, Int32 height, Int32 inset, BitmapColor color)
+        private String GetToggleMaskCommandParameter()
         {
-            var radius = Math.Max(2, height / 2);
-            for (var y = 0; y < height; y++)
+            var state = this._maskControl?.IsConnected != true
+                ? "disabled"
+                : this._maskControl.MaskEnabled == true ? "on" : "off";
+            return $"{ToggleMaskCommandPrefix}-{state}";
+        }
+
+        private static Boolean IsToggleMaskCommand(String actionParameter) =>
+            actionParameter?.StartsWith(ToggleMaskCommandPrefix, StringComparison.Ordinal) == true;
+
+        private static void DrawRoundedRectangle(BitmapBuilder bitmapBuilder, Int32 x, Int32 y, Int32 width, Int32 height, Int32 radius, BitmapColor color)
+        {
+            radius = Math.Max(0, Math.Min(radius, Math.Min(width, height) / 2));
+            for (var row = 0; row < height; row++)
             {
-                var lowerCurve = y >= height - radius;
-                var curveY = lowerCurve ? y - (height - radius) : 0;
-                var curveInset = lowerCurve
+                var topCurve = row < radius;
+                var bottomCurve = row >= height - radius;
+                var curveY = topCurve ? radius - row : bottomCurve ? row - (height - radius - 1) : 0;
+                var inset = topCurve || bottomCurve
                     ? (Int32)Math.Round(radius - Math.Sqrt(Math.Max(0, (radius * radius) - (curveY * curveY))))
                     : 0;
-                var x = inset + curveInset;
-                var rowWidth = width - (x * 2);
+                var rowWidth = width - (inset * 2);
                 if (rowWidth > 0)
                 {
-                    bitmapBuilder.FillRectangle(x, y, rowWidth, 1, color);
+                    bitmapBuilder.FillRectangle(x + inset, y + row, rowWidth, 1, color);
                 }
             }
         }
