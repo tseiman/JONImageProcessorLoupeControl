@@ -7,6 +7,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
+    using Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel;
     using LoupedeckWebConfigLib;
 
     public class JONImageProcessorLoupeControlPlugin : Plugin
@@ -23,6 +24,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         internal static JonCameraControl CameraControl { get; private set; } = new(GatewayClient);
 
+        internal static JonPresetControl PresetControl { get; private set; } = new(GatewayClient);
+
         internal static event Action PluginReady;
 
         public JONImageProcessorLoupeControlPlugin()
@@ -36,6 +39,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             GatewayClient = new JonGatewayClient();
             CameraControl = new JonCameraControl(GatewayClient);
+            PresetControl = new JonPresetControl(GatewayClient);
+            this.RegisterServices();
             var configuration = this.LoadGatewayConfiguration();
             this.ConfigureWebConfig(configuration);
             GatewayClient.Start(configuration);
@@ -45,7 +50,22 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public override void Unload()
         {
             LoupedeckWebConfig.DeactivateConfig();
+            if (ServiceDirectory.TryGet(ServiceDirectory.T_BlinkenLightsTimeSource, out var blinkenLightsTimeSource)
+                && blinkenLightsTimeSource is IDisposable disposableBlinkenLightsTimeSource)
+            {
+                disposableBlinkenLightsTimeSource.Dispose();
+            }
+
             GatewayClient.Dispose();
+        }
+
+        private void RegisterServices()
+        {
+            ServiceDirectory.Register(new BlinkenLightsTimeSource());
+            ServiceDirectory.Register(new MultiWheelFnState());
+            ServiceDirectory.Register(new MultiWheelDispatch());
+            ServiceDirectory.Register(PresetControl);
+            ServiceDirectory.Register(new PresetScrollAdjustment(PresetControl));
         }
 
         private void ConfigureWebConfig(JonGatewayConfiguration configuration)

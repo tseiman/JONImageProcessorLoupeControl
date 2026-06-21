@@ -75,6 +75,16 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             return this.PollAsync();
         }
 
+        public Task<JsonNode> GetApiAsync(String path)
+        {
+            return this.SendApiAsync(HttpMethod.Get, path, null);
+        }
+
+        public Task<JsonNode> PostApiAsync(String path, JsonNode content = null)
+        {
+            return this.SendApiAsync(HttpMethod.Post, path, content);
+        }
+
         private async Task PollAsync()
         {
             try
@@ -99,6 +109,34 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             using var response = await this._httpClient.SendAsync(httpRequest, this._lifetime.Token).ConfigureAwait(false);
             var text = await response.Content.ReadAsStringAsync(this._lifetime.Token).ConfigureAwait(false);
             var json = JsonNode.Parse(text);
+            if (!response.IsSuccessStatusCode || json?["ok"]?.GetValue<Boolean>() == false)
+            {
+                var error = json?["error"]?.GetValue<String>() ?? $"HTTP {(Int32)response.StatusCode}";
+                throw new InvalidOperationException(error);
+            }
+
+            return json;
+        }
+
+        private async Task<JsonNode> SendApiAsync(HttpMethod method, String path, JsonNode content)
+        {
+            if (String.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException("API path must not be empty", nameof(path));
+            }
+
+            var requestUri = new Uri(this._configuration.HttpBaseUri, path.StartsWith("/", StringComparison.Ordinal) ? path : $"/{path}");
+            using var httpRequest = new HttpRequestMessage(method, requestUri);
+            this.ApplyAuthHeaders(httpRequest);
+
+            if (content != null)
+            {
+                httpRequest.Content = new StringContent(content.ToJsonString(JsonOptions), Encoding.UTF8, "application/json");
+            }
+
+            using var response = await this._httpClient.SendAsync(httpRequest, this._lifetime.Token).ConfigureAwait(false);
+            var text = await response.Content.ReadAsStringAsync(this._lifetime.Token).ConfigureAwait(false);
+            var json = String.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text);
             if (!response.IsSuccessStatusCode || json?["ok"]?.GetValue<Boolean>() == false)
             {
                 var error = json?["error"]?.GetValue<String>() ?? $"HTTP {(Int32)response.StatusCode}";
