@@ -13,7 +13,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     {
         private const String ToggleMaskCommand = "toggle-mask";
         private const String CommitMorphologyCommand = "commit-morphology";
-        private const String NoopButtonCommand = "noop-button";
         private const String NoopThresholdCommand = "noop-threshold";
         private const String NoopSmoothingCommand = "noop-smoothing";
         private const String ThresholdAdjustment = "threshold";
@@ -73,16 +72,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             return new[]
             {
                 this.CreateCommandName(ToggleMaskCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
-                this.CreateCommandName(NoopButtonCommand),
                 PluginDynamicFolder.NavigateUpActionName
             };
         }
@@ -196,13 +185,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 using var bitmapBuilder = new BitmapBuilder(imageSize);
                 ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
                 ButtonVisuals.DrawText(bitmapBuilder, $"Set\n{Title(this._draftMorphology)}", BitmapColor.White);
-                return bitmapBuilder.ToImage();
-            }
-
-            if (actionParameter == NoopButtonCommand)
-            {
-                using var bitmapBuilder = new BitmapBuilder(imageSize);
-                ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
                 return bitmapBuilder.ToImage();
             }
 
