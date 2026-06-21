@@ -13,6 +13,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     {
         private const String ToggleMaskCommand = "toggle-mask";
         private const String CommitMorphologyCommand = "commit-morphology";
+        private const String NoopButtonCommand = "noop-button";
         private const String NoopThresholdCommand = "noop-threshold";
         private const String NoopSmoothingCommand = "noop-smoothing";
         private const String ThresholdAdjustment = "threshold";
@@ -20,11 +21,13 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private const String MorphologyAdjustment = "morphology";
         private const Double ThresholdStep = 0.001;
         private const Double SmoothingStep = 0.01;
+        private const Int32 MorphologyDraftHoldSeconds = 10;
         private static readonly String[] MorphologyOptions = ["off", "light", "strong"];
 
         private readonly Object _pollLock = new();
         private JonMaskControl _maskControl;
         private String _draftMorphology = "light";
+        private DateTime _lastMorphologyDraftChangeUtc = DateTime.MinValue;
         private Timer _folderPollTimer;
         private Boolean _isPollingActive;
 
@@ -69,8 +72,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.EnsureActiveFolderState();
             return new[]
             {
-                PluginDynamicFolder.NavigateUpActionName,
-                this.CreateCommandName(ToggleMaskCommand)
+                this.CreateCommandName(ToggleMaskCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                this.CreateCommandName(NoopButtonCommand),
+                PluginDynamicFolder.NavigateUpActionName
             };
         }
 
@@ -186,6 +199,13 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return bitmapBuilder.ToImage();
             }
 
+            if (actionParameter == NoopButtonCommand)
+            {
+                using var bitmapBuilder = new BitmapBuilder(imageSize);
+                ButtonVisuals.FillBackground(bitmapBuilder, imageSize, BitmapColor.Black);
+                return bitmapBuilder.ToImage();
+            }
+
             return null;
         }
 
@@ -272,6 +292,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             try
             {
                 await this._maskControl.SetMorphologyAsync(this._draftMorphology).ConfigureAwait(false);
+                this._draftMorphology = this._maskControl.Morphology;
+                this._lastMorphologyDraftChangeUtc = DateTime.MinValue;
             }
             catch (Exception ex)
             {
@@ -298,6 +320,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
 
             this._draftMorphology = MorphologyOptions[nextIndex];
+            this._lastMorphologyDraftChangeUtc = DateTime.UtcNow;
             this.RefreshAllActions();
         }
 
@@ -305,7 +328,16 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             if (e.Values.ContainsKey(JonMaskControl.MorphologyKey))
             {
-                this._draftMorphology = this._maskControl?.Morphology ?? this._draftMorphology;
+                var gatewayMorphology = this._maskControl?.Morphology ?? this._draftMorphology;
+                if (gatewayMorphology.Equals(this._draftMorphology, StringComparison.Ordinal))
+                {
+                    this._lastMorphologyDraftChangeUtc = DateTime.MinValue;
+                }
+                else if (!this.IsMorphologyDraftPinned())
+                {
+                    this._draftMorphology = gatewayMorphology;
+                    this._lastMorphologyDraftChangeUtc = DateTime.MinValue;
+                }
             }
 
             if (e.Values.ContainsKey(JonMaskControl.NoMaskKey)
@@ -346,6 +378,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.DetachMaskControl();
             this._maskControl = JONImageProcessorLoupeControlPlugin.MaskControl;
             this._draftMorphology = this._maskControl?.Morphology ?? "light";
+            this._lastMorphologyDraftChangeUtc = DateTime.MinValue;
             if (this._maskControl == null)
             {
                 return;
@@ -410,6 +443,12 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             catch (Exception)
             {
             }
+        }
+
+        private Boolean IsMorphologyDraftPinned()
+        {
+            return this._lastMorphologyDraftChangeUtc != DateTime.MinValue
+                && (DateTime.UtcNow - this._lastMorphologyDraftChangeUtc).TotalSeconds < MorphologyDraftHoldSeconds;
         }
 
         private static String FormatUnitValue(Double value) =>
