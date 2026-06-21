@@ -60,6 +60,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
 
         public Task SetMorphologyAsync(String value) => this._gatewayClient.SetValueAsync(MorphologyKey, NormalizeMorphology(value));
 
+        public Task RefreshAsync() => this._gatewayClient.RefreshAsync();
+
         public static Double ClampUnit(Double value) => Math.Clamp(value, 0.0, 1.0);
 
         public static String NormalizeMorphology(String value) =>

@@ -3,6 +3,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using System;
     using System.Collections.Generic;
     using System.Globalization;
+    using System.Threading;
 
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
@@ -21,8 +22,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private const Double SmoothingStep = 0.01;
         private static readonly String[] MorphologyOptions = ["off", "light", "strong"];
 
+        private readonly Object _pollLock = new();
         private JonMaskControl _maskControl;
         private String _draftMorphology = "light";
+        private Timer _folderPollTimer;
+        private Boolean _isPollingActive;
 
         public MaskDynamicFolder()
         {
@@ -32,25 +36,28 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override Boolean Load()
         {
-            this._maskControl = JONImageProcessorLoupeControlPlugin.MaskControl;
-            this._draftMorphology = this._maskControl?.Morphology ?? "light";
-            if (this._maskControl != null)
-            {
-                this._maskControl.StateChanged += this.OnMaskStateChanged;
-                this._maskControl.ConnectionChanged += this.OnMaskConnectionChanged;
-            }
-
+            JONImageProcessorLoupeControlPlugin.PluginReady += this.OnPluginReady;
             return true;
         }
 
         public override Boolean Unload()
         {
-            if (this._maskControl != null)
-            {
-                this._maskControl.StateChanged -= this.OnMaskStateChanged;
-                this._maskControl.ConnectionChanged -= this.OnMaskConnectionChanged;
-            }
+            JONImageProcessorLoupeControlPlugin.PluginReady -= this.OnPluginReady;
+            this.StopFolderPolling();
+            this.DetachMaskControl();
+            return true;
+        }
 
+        public override Boolean Activate()
+        {
+            this.AttachMaskControl();
+            this.StartFolderPolling();
+            return true;
+        }
+
+        public override Boolean Deactivate()
+        {
+            this.StopFolderPolling();
             return true;
         }
 
@@ -59,6 +66,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override IEnumerable<String> GetButtonPressActionNames(DeviceType deviceType)
         {
+            this.EnsureActiveFolderState();
             return new[]
             {
                 PluginDynamicFolder.NavigateUpActionName,
@@ -68,6 +76,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override IEnumerable<String> GetEncoderRotateActionNames(DeviceType deviceType)
         {
+            this.EnsureActiveFolderState();
             return new[]
             {
                 this.CreateAdjustmentName(ThresholdAdjustment),
@@ -78,6 +87,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         public override IEnumerable<String> GetEncoderPressActionNames(DeviceType deviceType)
         {
+            this.EnsureActiveFolderState();
             return new[]
             {
                 this.CreateCommandName(NoopThresholdCommand),
@@ -92,7 +102,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             {
                 if (this._maskControl?.IsConnected != true)
                 {
-                    this.ButtonActionNamesChanged();
+                    this.RefreshAllActions();
                     return;
                 }
 
@@ -155,7 +165,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             return actionParameter switch
             {
-                ToggleMaskCommand => this._maskControl?.MaskEnabled == true ? "Mask\nON" : "Mask\nOFF",
+                ToggleMaskCommand => MaskEnabledToggleCommand.CreateDisplayName(this._maskControl),
                 CommitMorphologyCommand => $"Set\n{Title(this._draftMorphology)}",
                 _ => null
             };
@@ -165,14 +175,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             if (actionParameter == ToggleMaskCommand)
             {
-                using var bitmapBuilder = new BitmapBuilder(imageSize);
-                var connected = this._maskControl?.IsConnected == true;
-                var enabled = this._maskControl?.MaskEnabled == true;
-                var background = !connected ? Colors.DisabledBackground : enabled ? Colors.Green : BitmapColor.Black;
-                var textColor = connected ? BitmapColor.White : Colors.DisabledText;
-                ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
-                ButtonVisuals.DrawText(bitmapBuilder, enabled ? "Mask\nON" : "Mask\nOFF", textColor);
-                return bitmapBuilder.ToImage();
+                return MaskEnabledToggleCommand.CreateCommandImage(this._maskControl, imageSize);
             }
 
             if (actionParameter == CommitMorphologyCommand)
@@ -326,6 +329,87 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.AdjustmentValueChanged(ThresholdAdjustment);
             this.AdjustmentValueChanged(SmoothingAdjustment);
             this.AdjustmentValueChanged(MorphologyAdjustment);
+        }
+
+        private void OnPluginReady()
+        {
+            this.AttachMaskControl();
+        }
+
+        private void AttachMaskControl()
+        {
+            if (ReferenceEquals(this._maskControl, JONImageProcessorLoupeControlPlugin.MaskControl))
+            {
+                return;
+            }
+
+            this.DetachMaskControl();
+            this._maskControl = JONImageProcessorLoupeControlPlugin.MaskControl;
+            this._draftMorphology = this._maskControl?.Morphology ?? "light";
+            if (this._maskControl == null)
+            {
+                return;
+            }
+
+            this._maskControl.StateChanged += this.OnMaskStateChanged;
+            this._maskControl.ConnectionChanged += this.OnMaskConnectionChanged;
+            this.RefreshAllActions();
+        }
+
+        private void DetachMaskControl()
+        {
+            if (this._maskControl == null)
+            {
+                return;
+            }
+
+            this._maskControl.StateChanged -= this.OnMaskStateChanged;
+            this._maskControl.ConnectionChanged -= this.OnMaskConnectionChanged;
+            this._maskControl = null;
+        }
+
+        private void EnsureActiveFolderState()
+        {
+            this.AttachMaskControl();
+            this.StartFolderPolling();
+        }
+
+        private void StartFolderPolling()
+        {
+            lock (this._pollLock)
+            {
+                if (this._isPollingActive)
+                {
+                    return;
+                }
+
+                this._isPollingActive = true;
+                this._folderPollTimer = new Timer(_ => _ = this.RefreshMaskStateAsync(), null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+            }
+        }
+
+        private void StopFolderPolling()
+        {
+            lock (this._pollLock)
+            {
+                this._isPollingActive = false;
+                this._folderPollTimer?.Dispose();
+                this._folderPollTimer = null;
+            }
+        }
+
+        private async System.Threading.Tasks.Task RefreshMaskStateAsync()
+        {
+            try
+            {
+                if (this._maskControl?.IsConnected == true)
+                {
+                    await this._maskControl.RefreshAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception)
+            {
+            }
         }
 
         private static String FormatUnitValue(Double value) =>
