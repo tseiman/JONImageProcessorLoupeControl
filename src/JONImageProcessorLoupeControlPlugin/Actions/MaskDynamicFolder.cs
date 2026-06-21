@@ -155,6 +155,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
       //  public override String GetButtonDisplayName(PluginImageSize imageSize) => "Mask";
 
+// public override String GetButtonDisplayName(PluginImageSize imageSize) => null;
+
      /*   public override BitmapImage GetButtonImage(PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
@@ -163,6 +165,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             return bitmapBuilder.ToImage();
         }
 */
+
+public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) => null;
+
     /*    public override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize)
         {
             return actionParameter switch
