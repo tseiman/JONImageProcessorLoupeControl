@@ -95,6 +95,26 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             return this.SendApiAsync(HttpMethod.Post, path, content);
         }
 
+        public async Task<IReadOnlyList<String>> GetSchemaEnumOptionsAsync(String key, IReadOnlyList<String> fallback)
+        {
+            if (String.IsNullOrWhiteSpace(key) || !this.IsConnected)
+            {
+                return fallback;
+            }
+
+            var schema = await this.GetApiAsync("/api/schema").ConfigureAwait(false);
+            if (schema?["config"]?["api"]?["commands"]?["set"]?["items"]?[key]?["enum"] is not JsonArray array)
+            {
+                return fallback;
+            }
+
+            var result = array
+                .Select(item => item?.GetValue<String>())
+                .Where(value => !String.IsNullOrWhiteSpace(value))
+                .ToArray();
+            return result.Length > 0 ? result : fallback;
+        }
+
         private async Task PollAsync()
         {
             try

@@ -1,6 +1,7 @@
 namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
 {
     using System;
+    using System.Collections.Generic;
     using System.Threading.Tasks;
 
     internal sealed class JonMaskControl
@@ -61,6 +62,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
         public Task SetMorphologyAsync(String value) => this._gatewayClient.SetValueAsync(MorphologyKey, NormalizeMorphology(value));
 
         public Task RefreshAsync() => this._gatewayClient.RefreshAsync();
+
+        public Task<IReadOnlyList<String>> GetMorphologyOptionsAsync() =>
+            this._gatewayClient.GetSchemaEnumOptionsAsync(MorphologyKey, ["off", "light", "strong"]);
 
         public static Double ClampUnit(Double value) => Math.Clamp(value, 0.0, 1.0);
 

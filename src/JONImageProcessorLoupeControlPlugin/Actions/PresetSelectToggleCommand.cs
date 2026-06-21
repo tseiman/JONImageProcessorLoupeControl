@@ -76,15 +76,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         protected override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
+            var connected = this._presetControl?.IsConnected == true;
             var isOn = this.GetCurrentState().Name.Equals("ON", StringComparison.Ordinal);
-            var background = isOn && this._keepActiveAfterCompletion
+            var background = !connected
+                ? Colors.DisabledBackground
+                : isOn && this._keepActiveAfterCompletion
                 ? Colors.Red
                 : isOn && this._blinkState
                     ? this._blinkColor
                     : BitmapColor.Black;
 
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
-            ButtonVisuals.DrawText(bitmapBuilder, this.GetCurrentState().DisplayName, BitmapColor.White);
+            ButtonVisuals.DrawText(bitmapBuilder, this.GetCurrentState().DisplayName, connected ? BitmapColor.White : Colors.DisabledText);
             return bitmapBuilder.ToImage();
         }
 

@@ -21,10 +21,10 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private const Double ThresholdStep = 0.001;
         private const Double SmoothingStep = 0.01;
         private const Int32 MorphologyDraftHoldSeconds = 10;
-        private static readonly String[] MorphologyOptions = ["off", "light", "strong"];
-
+        private static readonly String[] DefaultMorphologyOptions = ["off", "light", "strong"];
         private readonly Object _pollLock = new();
         private JonMaskControl _maskControl;
+        private IReadOnlyList<String> _morphologyOptions = DefaultMorphologyOptions;
         private String _draftMorphology = "light";
         private DateTime _lastMorphologyDraftChangeUtc = DateTime.MinValue;
         private Timer _folderPollTimer;
@@ -54,6 +54,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             this.AttachMaskControl();
             this.StartFolderPolling();
+            _ = this.RefreshMorphologyOptionsAsync();
             return true;
         }
 
@@ -281,19 +282,20 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         private void MoveDraftMorphology(Int32 diff)
         {
-            var currentIndex = Array.IndexOf(MorphologyOptions, JonMaskControl.NormalizeMorphology(this._draftMorphology));
+            var options = this._morphologyOptions?.Count > 0 ? this._morphologyOptions : DefaultMorphologyOptions;
+            var currentIndex = IndexOfOption(options, JonMaskControl.NormalizeMorphology(this._draftMorphology));
             if (currentIndex < 0)
             {
-                currentIndex = 1;
+                currentIndex = Math.Min(1, options.Count - 1);
             }
 
-            var nextIndex = Math.Clamp(currentIndex + Math.Sign(diff), 0, MorphologyOptions.Length - 1);
+            var nextIndex = Math.Clamp(currentIndex + Math.Sign(diff), 0, options.Count - 1);
             if (nextIndex == currentIndex)
             {
                 return;
             }
 
-            this._draftMorphology = MorphologyOptions[nextIndex];
+            this._draftMorphology = options[nextIndex];
             this._lastMorphologyDraftChangeUtc = DateTime.UtcNow;
             this.RefreshAllActions();
         }
@@ -419,6 +421,21 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
         }
 
+        private async System.Threading.Tasks.Task RefreshMorphologyOptionsAsync()
+        {
+            try
+            {
+                if (this._maskControl?.IsConnected == true)
+                {
+                    this._morphologyOptions = await this._maskControl.GetMorphologyOptionsAsync().ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Warning($"[MaskDynamicFolder] morphology schema load failed: {ex.Message}");
+            }
+        }
+
         private Boolean IsMorphologyDraftPinned()
         {
             return this._lastMorphologyDraftChangeUtc != DateTime.MinValue
@@ -432,19 +449,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         {
             var connected = maskControl?.IsConnected == true;
             var enabled = maskControl?.MaskEnabled == true;
-            var background = !connected
-                ? Colors.DisabledBackground
-                : enabled ? Colors.Green : Colors.Red;
-            var textColor = connected ? BitmapColor.White : Colors.DisabledText;
-
-            using var bitmapBuilder = new BitmapBuilder(imageSize);
-            var width = imageSize.GetWidth();
-            var height = imageSize.GetHeight();
-
-            bitmapBuilder.FillRectangle(0, 0, width, height, BitmapColor.Black);
-            DrawRoundedRectangle(bitmapBuilder, 0, 0, width, height, Math.Max(4, Math.Min(width, height) / 6), background);
-            ButtonVisuals.DrawText(bitmapBuilder, enabled ? "ON" : "OFF", textColor);
-            return bitmapBuilder.ToImage();
+            return DynamicFolderVisuals.CreateToggleImage(connected, enabled, imageSize);
         }
 
         private String GetToggleMaskCommandParameter()
@@ -458,23 +463,17 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private static Boolean IsToggleMaskCommand(String actionParameter) =>
             actionParameter?.StartsWith(ToggleMaskCommandPrefix, StringComparison.Ordinal) == true;
 
-        private static void DrawRoundedRectangle(BitmapBuilder bitmapBuilder, Int32 x, Int32 y, Int32 width, Int32 height, Int32 radius, BitmapColor color)
+        private static Int32 IndexOfOption(IReadOnlyList<String> options, String value)
         {
-            radius = Math.Max(0, Math.Min(radius, Math.Min(width, height) / 2));
-            for (var row = 0; row < height; row++)
+            for (var i = 0; i < options.Count; i++)
             {
-                var topCurve = row < radius;
-                var bottomCurve = row >= height - radius;
-                var curveY = topCurve ? radius - row : bottomCurve ? row - (height - radius - 1) : 0;
-                var inset = topCurve || bottomCurve
-                    ? (Int32)Math.Round(radius - Math.Sqrt(Math.Max(0, (radius * radius) - (curveY * curveY))))
-                    : 0;
-                var rowWidth = width - (inset * 2);
-                if (rowWidth > 0)
+                if (options[i].Equals(value, StringComparison.Ordinal))
                 {
-                    bitmapBuilder.FillRectangle(x + inset, y + row, rowWidth, 1, color);
+                    return i;
                 }
             }
+
+            return -1;
         }
 
         private static String Title(String value) =>
