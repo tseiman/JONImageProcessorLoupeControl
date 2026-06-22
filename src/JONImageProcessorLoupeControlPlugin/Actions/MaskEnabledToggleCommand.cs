@@ -21,7 +21,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             var enabled = maskControl?.MaskEnabled == true;
             var background = maskControl?.IsConnected != true
                 ? Colors.DisabledBackground
-                : enabled ? Colors.Green : BitmapColor.Black;
+                : enabled ? Colors.Green : Colors.Red;
           /*  ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
 
             var text = enabled ? "Mask\nON" : "Mask\nOFF";

@@ -59,7 +59,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         internal static BitmapImage ToggleButtonImage(Boolean connected, Boolean enabled, String label, PluginImageSize imageSize)
         {
             using var bitmapBuilder = new BitmapBuilder(imageSize);
-            var background = !connected ? Colors.DisabledBackground : enabled ? Colors.Green : BitmapColor.Black;
+            var background = !connected ? Colors.DisabledBackground : enabled ? Colors.Green : Colors.Red;
             var textColor = connected ? BitmapColor.White : Colors.DisabledText;
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
             ButtonVisuals.DrawText(bitmapBuilder, $"{label}\n{(enabled ? "ON" : "OFF")}", textColor);
