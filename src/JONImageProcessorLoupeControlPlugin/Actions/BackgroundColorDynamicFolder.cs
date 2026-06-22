@@ -2,6 +2,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 {
     using System;
     using System.Collections.Generic;
+    using System.Reflection;
     using System.Threading;
 
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
@@ -212,6 +213,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             this.AdjustmentValueChanged(GreenAdjustment);
             this.AdjustmentValueChanged(BlueAdjustment);
             this.AdjustmentValueChanged(AlphaAdjustment);
+            this.RefreshFolderButtonImage();
         }
 
         private void OnPluginReady()
@@ -304,6 +306,29 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         private Boolean IsColorDraftPinned() =>
             this._lastColorDraftChangeUtc != DateTime.MinValue
             && (DateTime.UtcNow - this._lastColorDraftChangeUtc).TotalSeconds < ColorDraftHoldSeconds;
+
+        private void RefreshFolderButtonImage()
+        {
+            try
+            {
+                // The SDK documents GetButtonImage(), but no public invalidation hook for the folder launcher image.
+                foreach (var methodName in new[] { "ButtonImageChanged", "FolderButtonImageChanged" })
+                {
+                    var method = typeof(PluginDynamicFolder).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (method == null || method.GetParameters().Length != 0)
+                    {
+                        continue;
+                    }
+
+                    method.Invoke(this, null);
+                    return;
+                }
+            }
+            catch (Exception)
+            {
+                return;
+            }
+        }
 
         private String GetCommitColorCommandParameter() =>
             $"{CommitColorCommandPrefix}-{this._draftColor.ToHex()}";
