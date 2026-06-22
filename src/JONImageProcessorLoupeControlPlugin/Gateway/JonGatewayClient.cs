@@ -20,13 +20,19 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
         private readonly Object _stateLock = new();
         private readonly Object _connectionLock = new();
+        private readonly Object _setQueueLock = new();
         private readonly HttpClient _httpClient = new();
+        private readonly SemaphoreSlim _gatewayRequestLock = new(1, 1);
         private Dictionary<String, Object> _values = new(StringComparer.Ordinal);
+        private Dictionary<String, IReadOnlyList<String>> _schemaEnumCache = new(StringComparer.Ordinal);
+        private Dictionary<String, PendingSetRequest> _pendingSetRequests = new(StringComparer.Ordinal);
+        private JsonNode _schemaCache;
         private CancellationTokenSource _lifetime = new();
         private Timer _pollTimer;
         private JonGatewayConfiguration _configuration = new();
         private Boolean _isStarted;
         private Boolean _hasReportedConnectionState;
+        private Boolean _setWorkerRunning;
 
         public JonGatewayClient()
         {
@@ -51,6 +57,12 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         public void ApplyConfiguration(JonGatewayConfiguration configuration)
         {
             this._configuration = configuration ?? new JonGatewayConfiguration();
+            lock (this._stateLock)
+            {
+                this._schemaEnumCache.Clear();
+                this._schemaCache = null;
+            }
+
             lock (this._connectionLock)
             {
                 this._hasReportedConnectionState = false;
@@ -65,19 +77,12 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
 
         public async Task SetValueAsync(String key, Object value)
         {
-            await this.SendIpcAsync(new JsonObject
-            {
-                ["cmd"] = "set",
-                ["key"] = key,
-                ["value"] = JsonSerializer.SerializeToNode(value, JsonOptions)
-            }).ConfigureAwait(false);
-
             this.ApplyState(new JsonObject
             {
                 [key] = JsonSerializer.SerializeToNode(value, JsonOptions)
             });
 
-            await this.RefreshAsync().ConfigureAwait(false);
+            await this.QueueSetValueAsync(key, value).ConfigureAwait(false);
         }
 
         public Task RefreshAsync()
@@ -102,7 +107,40 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                 return fallback;
             }
 
-            var schema = await this.GetApiAsync("/api/schema").ConfigureAwait(false);
+            lock (this._stateLock)
+            {
+                if (this._schemaEnumCache.TryGetValue(key, out var cached))
+                {
+                    return cached;
+                }
+            }
+
+            JsonNode schema;
+            lock (this._stateLock)
+            {
+                schema = this._schemaCache;
+            }
+
+            if (schema == null)
+            {
+                schema = await this.GetApiAsync("/api/schema").ConfigureAwait(false);
+                lock (this._stateLock)
+                {
+                    this._schemaCache = schema;
+                }
+            }
+
+            var options = ExtractSchemaEnumOptions(schema, key, fallback);
+            lock (this._stateLock)
+            {
+                this._schemaEnumCache[key] = options;
+            }
+
+            return options;
+        }
+
+        private static IReadOnlyList<String> ExtractSchemaEnumOptions(JsonNode schema, String key, IReadOnlyList<String> fallback)
+        {
             if (schema?["config"]?["api"]?["commands"]?["set"]?["items"]?[key]?["enum"] is not JsonArray array)
             {
                 return fallback;
@@ -117,9 +155,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
 
         private async Task PollAsync()
         {
+            if (!await this._gatewayRequestLock.WaitAsync(0).ConfigureAwait(false))
+            {
+                return;
+            }
+
             try
             {
-                var response = await this.SendIpcAsync(new JsonObject { ["cmd"] = "list" }).ConfigureAwait(false);
+                var response = await this.SendIpcCoreAsync(new JsonObject { ["cmd"] = "list" }).ConfigureAwait(false);
                 this.ApplyState(response);
                 this.SetConnected(true);
             }
@@ -127,9 +170,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             {
                 this.SetConnected(false, DescribeConnectivityFailure(ex));
             }
+            finally
+            {
+                this._gatewayRequestLock.Release();
+            }
         }
 
         private async Task<JsonNode> SendIpcAsync(JsonObject request)
+        {
+            return await this.EnqueueGatewayRequestAsync(() => this.SendIpcCoreAsync(request)).ConfigureAwait(false);
+        }
+
+        private async Task<JsonNode> SendIpcCoreAsync(JsonObject request)
         {
             var requestUri = new Uri(this._configuration.HttpBaseUri, "/api/ipc");
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, requestUri);
@@ -148,6 +200,68 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             return json;
         }
 
+        private Task QueueSetValueAsync(String key, Object value)
+        {
+            Task completionTask;
+            lock (this._setQueueLock)
+            {
+                if (this._pendingSetRequests.TryGetValue(key, out var replaced))
+                {
+                    replaced.Completion.TrySetResult(null);
+                }
+
+                var pending = new PendingSetRequest(key, value);
+                this._pendingSetRequests[key] = pending;
+                completionTask = pending.Completion.Task;
+
+                if (!this._setWorkerRunning)
+                {
+                    this._setWorkerRunning = true;
+                    _ = Task.Run(this.ProcessSetQueueAsync);
+                }
+            }
+
+            return completionTask;
+        }
+
+        private async Task ProcessSetQueueAsync()
+        {
+            while (true)
+            {
+                KeyValuePair<String, PendingSetRequest>[] pending;
+                lock (this._setQueueLock)
+                {
+                    if (this._pendingSetRequests.Count == 0)
+                    {
+                        this._setWorkerRunning = false;
+                        return;
+                    }
+
+                    pending = this._pendingSetRequests.ToArray();
+                    this._pendingSetRequests.Clear();
+                }
+
+                foreach (var entry in pending)
+                {
+                    var request = entry.Value;
+                    try
+                    {
+                        await this.EnqueueGatewayRequestAsync(() => this.SendIpcCoreAsync(new JsonObject
+                        {
+                            ["cmd"] = "set",
+                            ["key"] = request.Key,
+                            ["value"] = JsonSerializer.SerializeToNode(request.Value, JsonOptions)
+                        })).ConfigureAwait(false);
+                        request.Completion.TrySetResult(null);
+                    }
+                    catch (Exception ex)
+                    {
+                        request.Completion.TrySetException(ex);
+                    }
+                }
+            }
+        }
+
         private async Task<JsonNode> SendApiAsync(HttpMethod method, String path, JsonNode content)
         {
             if (String.IsNullOrWhiteSpace(path))
@@ -155,25 +269,41 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                 throw new ArgumentException("API path must not be empty", nameof(path));
             }
 
-            var requestUri = new Uri(this._configuration.HttpBaseUri, path.StartsWith("/", StringComparison.Ordinal) ? path : $"/{path}");
-            using var httpRequest = new HttpRequestMessage(method, requestUri);
-            this.ApplyAuthHeaders(httpRequest);
-
-            if (content != null)
+            return await this.EnqueueGatewayRequestAsync(async () =>
             {
-                httpRequest.Content = new StringContent(content.ToJsonString(JsonOptions), Encoding.UTF8, "application/json");
-            }
+                var requestUri = new Uri(this._configuration.HttpBaseUri, path.StartsWith("/", StringComparison.Ordinal) ? path : $"/{path}");
+                using var httpRequest = new HttpRequestMessage(method, requestUri);
+                this.ApplyAuthHeaders(httpRequest);
 
-            using var response = await this._httpClient.SendAsync(httpRequest, this._lifetime.Token).ConfigureAwait(false);
-            var text = await response.Content.ReadAsStringAsync(this._lifetime.Token).ConfigureAwait(false);
-            var json = String.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text);
-            if (!response.IsSuccessStatusCode || json?["ok"]?.GetValue<Boolean>() == false)
+                if (content != null)
+                {
+                    httpRequest.Content = new StringContent(content.ToJsonString(JsonOptions), Encoding.UTF8, "application/json");
+                }
+
+                using var response = await this._httpClient.SendAsync(httpRequest, this._lifetime.Token).ConfigureAwait(false);
+                var text = await response.Content.ReadAsStringAsync(this._lifetime.Token).ConfigureAwait(false);
+                var json = String.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text);
+                if (!response.IsSuccessStatusCode || json?["ok"]?.GetValue<Boolean>() == false)
+                {
+                    var error = json?["error"]?.GetValue<String>() ?? $"HTTP {(Int32)response.StatusCode}";
+                    throw new InvalidOperationException(error);
+                }
+
+                return json;
+            }).ConfigureAwait(false);
+        }
+
+        private async Task<JsonNode> EnqueueGatewayRequestAsync(Func<Task<JsonNode>> request)
+        {
+            await this._gatewayRequestLock.WaitAsync(this._lifetime.Token).ConfigureAwait(false);
+            try
             {
-                var error = json?["error"]?.GetValue<String>() ?? $"HTTP {(Int32)response.StatusCode}";
-                throw new InvalidOperationException(error);
+                return await request().ConfigureAwait(false);
             }
-
-            return json;
+            finally
+            {
+                this._gatewayRequestLock.Release();
+            }
         }
 
         private void ApplyAuthHeaders(HttpRequestMessage request)
@@ -451,7 +581,24 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             this._pollTimer?.Dispose();
             this._lifetime.Cancel();
             this._lifetime.Dispose();
+            this._gatewayRequestLock.Dispose();
             this._httpClient.Dispose();
+        }
+
+        private sealed class PendingSetRequest
+        {
+            public PendingSetRequest(String key, Object value)
+            {
+                this.Key = key;
+                this.Value = value;
+                this.Completion = new TaskCompletionSource<Object>(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            public String Key { get; }
+
+            public Object Value { get; }
+
+            public TaskCompletionSource<Object> Completion { get; }
         }
     }
 }

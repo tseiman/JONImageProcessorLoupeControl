@@ -62,7 +62,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
 
             var encodedId = Uri.EscapeDataString(preset.Id);
             await this._gatewayClient.PostApiAsync($"/api/presets/{encodedId}/apply").ConfigureAwait(false);
-            await this._gatewayClient.RefreshAsync().ConfigureAwait(false);
         }
     }
 }
