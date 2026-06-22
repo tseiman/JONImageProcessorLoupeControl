@@ -75,14 +75,15 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             }
         }
 
-        public async Task SetValueAsync(String key, Object value)
+        public Task SetValueAsync(String key, Object value)
         {
             this.ApplyState(new JsonObject
             {
                 [key] = JsonSerializer.SerializeToNode(value, JsonOptions)
             });
 
-            await this.QueueSetValueAsync(key, value).ConfigureAwait(false);
+            this.QueueSetValue(key, value);
+            return Task.CompletedTask;
         }
 
         public Task RefreshAsync()
@@ -200,19 +201,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             return json;
         }
 
-        private Task QueueSetValueAsync(String key, Object value)
+        private void QueueSetValue(String key, Object value)
         {
-            Task completionTask;
             lock (this._setQueueLock)
             {
-                if (this._pendingSetRequests.TryGetValue(key, out var replaced))
-                {
-                    replaced.Completion.TrySetResult(null);
-                }
-
-                var pending = new PendingSetRequest(key, value);
-                this._pendingSetRequests[key] = pending;
-                completionTask = pending.Completion.Task;
+                this._pendingSetRequests[key] = new PendingSetRequest(key, value);
 
                 if (!this._setWorkerRunning)
                 {
@@ -220,8 +213,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                     _ = Task.Run(this.ProcessSetQueueAsync);
                 }
             }
-
-            return completionTask;
         }
 
         private async Task ProcessSetQueueAsync()
@@ -252,11 +243,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                             ["key"] = request.Key,
                             ["value"] = JsonSerializer.SerializeToNode(request.Value, JsonOptions)
                         })).ConfigureAwait(false);
-                        request.Completion.TrySetResult(null);
+                        this.SetConnected(true);
                     }
                     catch (Exception ex)
                     {
-                        request.Completion.TrySetException(ex);
+                        this.SetConnected(false, DescribeConnectivityFailure(ex));
                     }
                 }
             }
@@ -591,14 +582,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
             {
                 this.Key = key;
                 this.Value = value;
-                this.Completion = new TaskCompletionSource<Object>(TaskCreationOptions.RunContinuationsAsynchronously);
             }
 
             public String Key { get; }
 
             public Object Value { get; }
-
-            public TaskCompletionSource<Object> Completion { get; }
         }
     }
 }
