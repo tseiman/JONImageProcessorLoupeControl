@@ -21,14 +21,17 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         private readonly Object _stateLock = new();
         private readonly Object _connectionLock = new();
         private readonly Object _setQueueLock = new();
+        private readonly Object _stateEventLock = new();
         private readonly HttpClient _httpClient = new();
         private readonly SemaphoreSlim _gatewayRequestLock = new(1, 1);
         private Dictionary<String, Object> _values = new(StringComparer.Ordinal);
         private Dictionary<String, IReadOnlyList<String>> _schemaEnumCache = new(StringComparer.Ordinal);
         private Dictionary<String, PendingSetRequest> _pendingSetRequests = new(StringComparer.Ordinal);
+        private readonly Dictionary<String, Object> _pendingStateEvents = new(StringComparer.Ordinal);
         private JsonNode _schemaCache;
         private CancellationTokenSource _lifetime = new();
         private Timer _pollTimer;
+        private Timer _stateEventTimer;
         private JonGatewayConfiguration _configuration = new();
         private Boolean _isStarted;
         private Boolean _hasReportedConnectionState;
@@ -247,7 +250,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                     }
                     catch (Exception ex)
                     {
-                        this.SetConnected(false, DescribeConnectivityFailure(ex));
+                        this.ReportSetFailure(ex);
                     }
                 }
             }
@@ -408,7 +411,59 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                 }
             }
 
-            this.StateChanged?.Invoke(this, new JonGatewayStateChangedEventArgs(flat));
+            this.QueueStateChanged(flat);
+        }
+
+        private void QueueStateChanged(IReadOnlyDictionary<String, Object> values)
+        {
+            lock (this._stateEventLock)
+            {
+                foreach (var entry in values)
+                {
+                    this._pendingStateEvents[entry.Key] = entry.Value;
+                }
+
+                this._stateEventTimer ??= new Timer(_ => this.FlushStateChanged(), null, Timeout.Infinite, Timeout.Infinite);
+                this._stateEventTimer.Change(TimeSpan.FromMilliseconds(50), Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        private void FlushStateChanged()
+        {
+            Dictionary<String, Object> values;
+            lock (this._stateEventLock)
+            {
+                if (this._pendingStateEvents.Count == 0)
+                {
+                    return;
+                }
+
+                values = new Dictionary<String, Object>(this._pendingStateEvents, StringComparer.Ordinal);
+                this._pendingStateEvents.Clear();
+            }
+
+            this.RaiseStateChanged(new JonGatewayStateChangedEventArgs(values));
+        }
+
+        private void RaiseStateChanged(JonGatewayStateChangedEventArgs args)
+        {
+            var handlers = this.StateChanged;
+            if (handlers == null)
+            {
+                return;
+            }
+
+            foreach (EventHandler<JonGatewayStateChangedEventArgs> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(this, args);
+                }
+                catch (Exception ex)
+                {
+                    PluginLog.Warning($"[JonGatewayClient] state subscriber failed: {ex.Message}");
+                }
+            }
         }
 
         private static void FlattenState(JsonNode node, String prefix, Dictionary<String, Object> output)
@@ -529,6 +584,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
 
         private void SetConnected(Boolean connected, String reason = null)
         {
+            var changed = false;
             lock (this._connectionLock)
             {
                 if (this._hasReportedConnectionState && this.IsConnected == connected)
@@ -547,8 +603,44 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
                     PluginLog.Warning($"[JonGatewayClient] gateway unavailable at {this._configuration.NormalizedGatewayBaseUrl}: {reason ?? "not reachable"}");
                 }
 
-                this.ConnectionChanged?.Invoke(connected);
+                changed = true;
             }
+
+            if (changed)
+            {
+                this.RaiseConnectionChanged(connected);
+            }
+        }
+
+        private void RaiseConnectionChanged(Boolean connected)
+        {
+            var handlers = this.ConnectionChanged;
+            if (handlers == null)
+            {
+                return;
+            }
+
+            foreach (Action<Boolean> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(connected);
+                }
+                catch (Exception ex)
+                {
+                    PluginLog.Warning($"[JonGatewayClient] connection subscriber failed: {ex.Message}");
+                }
+            }
+        }
+
+        private void ReportSetFailure(Exception ex)
+        {
+            if (ex is OperationCanceledException)
+            {
+                return;
+            }
+
+            PluginLog.Warning($"[JonGatewayClient] gateway set failed: {DescribeConnectivityFailure(ex)}");
         }
 
         private static String DescribeConnectivityFailure(Exception ex)
@@ -570,6 +662,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         public void Dispose()
         {
             this._pollTimer?.Dispose();
+            this._stateEventTimer?.Dispose();
             this._lifetime.Cancel();
             this._lifetime.Dispose();
             this._gatewayRequestLock.Dispose();

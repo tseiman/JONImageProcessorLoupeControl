@@ -57,22 +57,13 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return;
             }
 
-            _ = this.ToggleAsync();
-        }
-
-        private async System.Threading.Tasks.Task ToggleAsync()
-        {
             try
             {
-                await this.MaskControl.ToggleMaskEnabledAsync().ConfigureAwait(false);
+                _ = this.MaskControl.ToggleMaskEnabledAsync();
             }
             catch (Exception ex)
             {
                 PluginLog.Warning($"[MaskEnabledToggleCommand] toggle failed: {ex.Message}");
-            }
-            finally
-            {
-                this.ActionImageChanged();
             }
         }
 

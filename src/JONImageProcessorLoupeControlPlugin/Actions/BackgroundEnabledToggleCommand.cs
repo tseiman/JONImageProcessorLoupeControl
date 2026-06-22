@@ -32,7 +32,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return;
             }
 
-            _ = this.ToggleAsync();
+            try
+            {
+                _ = this.BackgroundControl.ToggleBackgroundEnabledAsync();
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Warning($"[BackgroundEnabledToggleCommand] toggle failed: {ex.Message}");
+            }
         }
 
         protected override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize) =>
@@ -40,22 +47,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) =>
             this.BackgroundControl.BackgroundEnabled == true ? "Background ON" : "Background OFF";
-
-        private async System.Threading.Tasks.Task ToggleAsync()
-        {
-            try
-            {
-                await this.BackgroundControl.ToggleBackgroundEnabledAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                PluginLog.Warning($"[BackgroundEnabledToggleCommand] toggle failed: {ex.Message}");
-            }
-            finally
-            {
-                this.ActionImageChanged();
-            }
-        }
 
         private void OnGatewayStateChanged(Object sender, JonGatewayStateChangedEventArgs e)
         {

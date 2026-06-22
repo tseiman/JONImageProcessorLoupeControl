@@ -32,7 +32,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return;
             }
 
-            _ = this.ToggleAsync();
+            try
+            {
+                _ = this.BackgroundControl.ToggleLoopIfVideoAsync();
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Warning($"[BackgroundLoopVideoToggleCommand] toggle failed: {ex.Message}");
+            }
         }
 
         protected override BitmapImage GetCommandImage(String actionParameter, PluginImageSize imageSize) =>
@@ -40,22 +47,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         protected override String GetCommandDisplayName(String actionParameter, PluginImageSize imageSize) =>
             this.BackgroundControl.LoopIfVideo == true ? "Loop Video ON" : "Loop Video OFF";
-
-        private async System.Threading.Tasks.Task ToggleAsync()
-        {
-            try
-            {
-                await this.BackgroundControl.ToggleLoopIfVideoAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                PluginLog.Warning($"[BackgroundLoopVideoToggleCommand] toggle failed: {ex.Message}");
-            }
-            finally
-            {
-                this.ActionImageChanged();
-            }
-        }
 
         private void OnGatewayStateChanged(Object sender, JonGatewayStateChangedEventArgs e)
         {

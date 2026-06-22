@@ -32,7 +32,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return;
             }
 
-            _ = this.SetAsync(Math.Clamp(this.BackgroundControl.BlurStrength + diff, 1, 100));
+            try
+            {
+                _ = this.BackgroundControl.SetBlurStrengthAsync(Math.Clamp(this.BackgroundControl.BlurStrength + diff, 1, 100));
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Warning($"[BackgroundBlurStrengthAdjustment] update failed: {ex.Message}");
+            }
         }
 
         protected override String GetAdjustmentDisplayName(String actionParameter, PluginImageSize imageSize) => "Blur";
@@ -42,22 +49,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         protected override BitmapImage GetAdjustmentImage(String actionParameter, PluginImageSize imageSize) =>
             DynamicFolderVisuals.CreateTextImage("Blur", this.BackgroundControl.IsConnected, imageSize);
-
-        private async System.Threading.Tasks.Task SetAsync(Int32 value)
-        {
-            try
-            {
-                await this.BackgroundControl.SetBlurStrengthAsync(value).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                PluginLog.Warning($"[BackgroundBlurStrengthAdjustment] update failed: {ex.Message}");
-            }
-            finally
-            {
-                this.Refresh();
-            }
-        }
 
         private void OnGatewayStateChanged(Object sender, JonGatewayStateChangedEventArgs e)
         {

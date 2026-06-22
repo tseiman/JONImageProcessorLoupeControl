@@ -1,16 +1,20 @@
 namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Background
 {
     using System;
+    using System.Threading;
 
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
+    using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
 
     internal sealed class BackgroundColorDraftState
     {
         private const Int32 DraftHoldSeconds = 10;
+        private readonly Object _changedLock = new();
         private JonBackgroundControl _backgroundControl;
         private BackgroundRgba _draftColor = new(0, 255, 0, 255);
         private DateTime _lastDraftChangeUtc = DateTime.MinValue;
+        private Timer _changedTimer;
 
         public event Action Changed;
 
@@ -53,7 +57,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Background
                 _ => this._draftColor
             };
             this._lastDraftChangeUtc = DateTime.UtcNow;
-            this.Changed?.Invoke();
+            this.QueueChanged();
         }
 
         public void MoveChannel(BackgroundColorChannel channel, Int32 diff) =>
@@ -79,7 +83,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Background
             await this._backgroundControl.SetOverlayRgbaAsync(this._draftColor).ConfigureAwait(false);
             this._draftColor = this._backgroundControl.OverlayRgba;
             this._lastDraftChangeUtc = DateTime.MinValue;
-            this.Changed?.Invoke();
+            this.QueueChanged();
         }
 
         private void OnBackgroundStateChanged(Object sender, JonGatewayStateChangedEventArgs e)
@@ -100,7 +104,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Background
             }
             else
             {
-                this.Changed?.Invoke();
+                this.QueueChanged();
             }
         }
 
@@ -113,11 +117,41 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Background
 
             this._draftColor = this._backgroundControl?.OverlayRgba ?? this._draftColor;
             this._lastDraftChangeUtc = DateTime.MinValue;
-            this.Changed?.Invoke();
+            this.QueueChanged();
         }
 
         private Boolean IsDraftPinned() =>
             this._lastDraftChangeUtc != DateTime.MinValue
             && (DateTime.UtcNow - this._lastDraftChangeUtc).TotalSeconds < DraftHoldSeconds;
+
+        private void QueueChanged()
+        {
+            lock (this._changedLock)
+            {
+                this._changedTimer ??= new Timer(_ => this.RaiseChanged(), null, Timeout.Infinite, Timeout.Infinite);
+                this._changedTimer.Change(TimeSpan.FromMilliseconds(50), Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        private void RaiseChanged()
+        {
+            var handlers = this.Changed;
+            if (handlers == null)
+            {
+                return;
+            }
+
+            foreach (Action handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler();
+                }
+                catch (Exception ex)
+                {
+                    PluginLog.Warning($"[BackgroundColorDraftState] subscriber failed: {ex.Message}");
+                }
+            }
+        }
     }
 }

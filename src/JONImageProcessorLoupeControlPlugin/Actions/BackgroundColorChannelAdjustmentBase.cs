@@ -36,7 +36,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
 
             this.DraftState.MoveChannel(this._channel, diff);
-            this.Refresh();
         }
 
         protected override String GetAdjustmentDisplayName(String actionParameter, PluginImageSize imageSize) => this._shortName;

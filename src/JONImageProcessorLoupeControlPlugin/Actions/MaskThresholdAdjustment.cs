@@ -32,7 +32,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return;
             }
 
-            _ = this.SetAsync(JonMaskControl.ClampUnit(this.MaskControl.Threshold + (diff * 0.01)));
+            try
+            {
+                _ = this.MaskControl.SetThresholdAsync(JonMaskControl.ClampUnit(this.MaskControl.Threshold + (diff * 0.01)));
+            }
+            catch (Exception ex)
+            {
+                PluginLog.Warning($"[MaskThresholdAdjustment] update failed: {ex.Message}");
+            }
         }
 
         protected override String GetAdjustmentDisplayName(String actionParameter, PluginImageSize imageSize) => "Threshold";
@@ -42,22 +49,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         protected override BitmapImage GetAdjustmentImage(String actionParameter, PluginImageSize imageSize) =>
             DynamicFolderVisuals.CreateTextImage("Threshold", this.MaskControl.IsConnected, imageSize);
-
-        private async System.Threading.Tasks.Task SetAsync(Double value)
-        {
-            try
-            {
-                await this.MaskControl.SetThresholdAsync(value).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                PluginLog.Warning($"[MaskThresholdAdjustment] update failed: {ex.Message}");
-            }
-            finally
-            {
-                this.Refresh();
-            }
-        }
 
         private void OnGatewayStateChanged(Object sender, JonGatewayStateChangedEventArgs e)
         {

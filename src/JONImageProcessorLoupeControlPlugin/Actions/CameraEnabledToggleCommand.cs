@@ -33,22 +33,13 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 return;
             }
 
-            _ = this.ToggleAsync();
-        }
-
-        private async System.Threading.Tasks.Task ToggleAsync()
-        {
             try
             {
-                await this.CameraControl.ToggleEnabledAsync().ConfigureAwait(false);
+                _ = this.CameraControl.ToggleEnabledAsync();
             }
             catch (Exception ex)
             {
                 PluginLog.Warning($"[CameraEnabledToggleCommand] toggle failed: {ex.Message}");
-            }
-            finally
-            {
-                this.ActionImageChanged();
             }
         }
 
