@@ -4,6 +4,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using System.Reflection;
     using System.Text.Json.Nodes;
 
+    using Loupedeck.JONImageProcessorLoupeControlPlugin.Background;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
@@ -30,6 +31,8 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         internal static JonBackgroundControl BackgroundControl { get; private set; } = new(GatewayClient);
 
+        internal static BackgroundColorDraftState BackgroundColorDraftState { get; private set; } = new();
+
         internal static event Action PluginReady;
 
         public JONImageProcessorLoupeControlPlugin()
@@ -46,6 +49,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             PresetControl = new JonPresetControl(GatewayClient);
             MaskControl = new JonMaskControl(GatewayClient);
             BackgroundControl = new JonBackgroundControl(GatewayClient);
+            BackgroundColorDraftState = new BackgroundColorDraftState();
             this.RegisterServices();
             var configuration = this.LoadGatewayConfiguration();
             this.ConfigureWebConfig(configuration);
@@ -73,8 +77,10 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             ServiceDirectory.Register(PresetControl);
             ServiceDirectory.Register(MaskControl);
             ServiceDirectory.Register(BackgroundControl);
+            ServiceDirectory.Register(BackgroundColorDraftState);
             ServiceDirectory.Register(new PresetScrollAdjustment(PresetControl));
             ServiceDirectory.Register(new BackgroundAssetScrollAdjustment(BackgroundControl));
+            BackgroundColorDraftState.Attach(BackgroundControl);
         }
 
         private void ConfigureWebConfig(JonGatewayConfiguration configuration)
