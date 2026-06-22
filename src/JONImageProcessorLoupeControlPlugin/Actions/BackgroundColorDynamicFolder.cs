@@ -191,7 +191,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 }
 
                 this.RefreshAllActions();
-                this.ActionImageChanged();
             }
         }
 
@@ -203,7 +202,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             }
 
             this.RefreshAllActions();
-            this.ActionImageChanged();
         }
 
         private void RefreshAllActions()
@@ -295,7 +293,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                     {
                         this._draftColor = this._backgroundControl.OverlayRgba;
                         this.RefreshAllActions();
-                        this.ActionImageChanged();
                     }
                 }
             }
