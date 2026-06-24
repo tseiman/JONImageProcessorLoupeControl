@@ -60,6 +60,15 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Tools
             using var bitmapBuilder = this.CreateBitmapBuilder();
             if (activeDisplay != null)
             {
+                if (activeDisplay is IMultiWheelRenderedDisplayable renderedDisplay)
+                {
+                    var renderedImage = renderedDisplay.RenderDisplayImage();
+                    if (renderedImage != null)
+                    {
+                        return renderedImage;
+                    }
+                }
+
                 activeDisplay.RenderDisplay(bitmapBuilder);
                 return bitmapBuilder.ToImage();
             }

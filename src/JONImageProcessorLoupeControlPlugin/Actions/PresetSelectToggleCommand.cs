@@ -8,7 +8,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
     public sealed class PresetSelectToggleCommand : PluginMultistateDynamicCommand, IBlinkenLightsReceiver, IMultiWheelDispatchable, IMultiWheelUploadCompletedHandler
     {
-        private readonly BitmapColor _blinkColor = new(0xff, 0xc0, 0x00);
         private Boolean _blinkState = true;
         private Boolean _keepActiveAfterCompletion;
         private MultiWheelDispatch _multiWheelDispatch;
@@ -81,10 +80,10 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             var background = !connected
                 ? Colors.DisabledBackground
                 : isOn && this._keepActiveAfterCompletion
-                ? Colors.Red
-                : isOn && this._blinkState
-                    ? this._blinkColor
-                    : BitmapColor.Black;
+                    ? Colors.Red
+                    : isOn && this._blinkState
+                    ? Colors.ORANGE
+                    : Colors.Black;
 
             ButtonVisuals.FillBackground(bitmapBuilder, imageSize, background);
             ButtonVisuals.DrawText(bitmapBuilder, this.GetCurrentState().DisplayName, connected ? BitmapColor.White : Colors.DisabledText);

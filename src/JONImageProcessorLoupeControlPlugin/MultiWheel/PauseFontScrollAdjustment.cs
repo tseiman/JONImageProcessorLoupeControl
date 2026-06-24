@@ -2,15 +2,23 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Linq;
     using System.Threading.Tasks;
 
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
 
-    internal sealed class PauseFontScrollAdjustment : IMultiWheelAdjustment, IMultiWheelDisplayable
+    using SixLabors.Fonts;
+    using SixLabors.ImageSharp;
+    using SixLabors.ImageSharp.Drawing.Processing;
+    using SixLabors.ImageSharp.PixelFormats;
+    using SixLabors.ImageSharp.Processing;
+
+    internal sealed class PauseFontScrollAdjustment : IMultiWheelAdjustment, IMultiWheelDisplayable, IMultiWheelRenderedDisplayable
     {
         private const Int32 MultiWheelScrollTicksPerFont = 10;
+        private const Int32 WheelCanvasSize = 512;
         private readonly JonPauseControl _pauseControl;
         private readonly Object _lock = new();
         private IReadOnlyList<JonAssetSummary> _fonts = Array.Empty<JonAssetSummary>();
@@ -110,6 +118,50 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
             bitmapBuilder.DrawText(this.GetDisplayText(), BitmapColor.White);
         }
 
+        public BitmapImage RenderDisplayImage()
+        {
+            using var image = new Image<Rgba32>(WheelCanvasSize, WheelCanvasSize, Color.Black);
+            using var stream = new MemoryStream();
+            var (font, index, count, isLoading) = this.GetCurrentFontDisplayData();
+            var displayText = isLoading
+                ? "Loading Fonts"
+                : font == null
+                    ? "No Fonts"
+                    : font.Name;
+            var indexText = count > 0 ? $"{index + 1}/{count}" : "";
+            var previewFont = CreatePreviewFont(font, 76, FontStyle.Regular);
+            var indexFont = SystemFonts.CreateFont("Arial", 44, FontStyle.Bold);
+            var labelFont = SystemFonts.CreateFont("Arial", 24, FontStyle.Regular);
+            var maxTextWidth = WheelCanvasSize - 56;
+            var previewText = TrimToWidth(displayText, previewFont, maxTextWidth);
+            var previewSize = TextMeasurer.MeasureSize(previewText, new TextOptions(previewFont));
+            var indexSize = TextMeasurer.MeasureSize(indexText, new TextOptions(indexFont));
+            var typeText = font?.Type ?? "";
+            var typeSize = TextMeasurer.MeasureSize(typeText, new TextOptions(labelFont));
+            var totalHeight = previewSize.Height + 18 + indexSize.Height + (String.IsNullOrWhiteSpace(typeText) ? 0 : 12 + typeSize.Height);
+            var y = (WheelCanvasSize - totalHeight) / 2f;
+
+            image.Mutate(context =>
+            {
+                context.DrawText(previewText, previewFont, Color.White, new PointF((WheelCanvasSize - previewSize.Width) / 2f, y));
+                y += previewSize.Height + 18;
+
+                if (!String.IsNullOrWhiteSpace(indexText))
+                {
+                    context.DrawText(indexText, indexFont, Color.White, new PointF((WheelCanvasSize - indexSize.Width) / 2f, y));
+                    y += indexSize.Height + 12;
+                }
+
+                if (!String.IsNullOrWhiteSpace(typeText))
+                {
+                    context.DrawText(typeText, labelFont, Color.Gray, new PointF((WheelCanvasSize - typeSize.Width) / 2f, y));
+                }
+            });
+
+            image.SaveAsPng(stream);
+            return BitmapImage.FromArray(stream.ToArray());
+        }
+
         public void Touch()
         {
             _ = this.ApplyCurrentFontAsync();
@@ -185,6 +237,18 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
             }
         }
 
+        private (JonAssetSummary Font, Int32 Index, Int32 Count, Boolean IsLoading) GetCurrentFontDisplayData()
+        {
+            lock (this._lock)
+            {
+                return (
+                    this._fonts.Count == 0 ? null : this._fonts[this._currentIndex],
+                    this._currentIndex,
+                    this._fonts.Count,
+                    this._isLoading);
+            }
+        }
+
         private String GetDisplayText()
         {
             lock (this._lock)
@@ -202,6 +266,51 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
                 var font = this._fonts[this._currentIndex];
                 return $"{font.Name}\n{this._currentIndex + 1}/{this._fonts.Count}";
             }
+        }
+
+        private static Font CreatePreviewFont(JonAssetSummary font, Single size, FontStyle style)
+        {
+            var candidates = new[]
+            {
+                font?.Id,
+                font?.Name,
+                "Arial"
+            };
+
+            foreach (var candidate in candidates)
+            {
+                if (String.IsNullOrWhiteSpace(candidate))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    return SystemFonts.CreateFont(candidate, size, style);
+                }
+                catch
+                {
+                }
+            }
+
+            return SystemFonts.CreateFont("Arial", size, style);
+        }
+
+        private static String TrimToWidth(String text, Font font, Single maxWidth)
+        {
+            var value = String.IsNullOrWhiteSpace(text) ? "" : text.Trim();
+            var options = new TextOptions(font);
+            if (TextMeasurer.MeasureSize(value, options).Width <= maxWidth)
+            {
+                return value;
+            }
+
+            while (value.Length > 1 && TextMeasurer.MeasureSize($"{value}...", options).Width > maxWidth)
+            {
+                value = value[..^1];
+            }
+
+            return $"{value}...";
         }
     }
 }
