@@ -3,6 +3,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
     using System;
     using System.Collections.Generic;
     using System.Globalization;
+    using System.IO;
     using System.Linq;
     using System.Text.Json.Nodes;
     using System.Threading.Tasks;
@@ -121,6 +122,23 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
             return fonts;
         }
 
+        public async Task<String> DownloadFontAsync(JonAssetSummary font)
+        {
+            if (font == null || font.Type?.Equals("Built-in", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return null;
+            }
+
+            var cachePath = GetCachedFontPath(font);
+            if (File.Exists(cachePath))
+            {
+                return cachePath;
+            }
+
+            await this._gatewayClient.DownloadApiFileAsync($"/api/files/{FontAssetRoot}/{Uri.EscapeDataString(font.Id)}", cachePath).ConfigureAwait(false);
+            return cachePath;
+        }
+
         private async Task<IReadOnlyList<String>> GetBuiltinFontsAsync()
         {
             try
@@ -168,11 +186,24 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
                     Id = id,
                     Name = item["name"]?.GetValue<String>() ?? id,
                     Type = item["type"]?.GetValue<String>() ?? "",
-                    Description = item["description"]?.GetValue<String>() ?? ""
+                    Description = item["description"]?.GetValue<String>() ?? "",
+                    Mtime = item["mtime"]?.GetValue<String>() ?? ""
                 });
             }
 
             return assets;
+        }
+
+        private static String GetCachedFontPath(JonAssetSummary font)
+        {
+            var cacheRoot = Path.Combine(Path.GetTempPath(), "JONImageProcessorLoupeControl", "fonts");
+            var safeId = new String((font.Id ?? "font")
+                .Select(ch => Char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-' ? ch : '_')
+                .ToArray());
+            var cacheKey = new String((String.IsNullOrWhiteSpace(font.Mtime) ? "current" : font.Mtime)
+                .Select(ch => Char.IsLetterOrDigit(ch) ? ch : '_')
+                .ToArray());
+            return Path.Combine(cacheRoot, $"{safeId}-{cacheKey}.ttf");
         }
 
         private static (Int32 X, Int32 Y) ParseTextPosition(String value)

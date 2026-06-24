@@ -3,6 +3,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
     using System;
     using System.Collections.Generic;
     using System.Globalization;
+    using System.IO;
     using System.Linq;
     using System.Net.Http;
     using System.Net.Http.Headers;
@@ -102,6 +103,46 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway
         public Task<JsonNode> PostApiAsync(String path, JsonNode content = null)
         {
             return this.SendApiAsync(HttpMethod.Post, path, content);
+        }
+
+        public async Task DownloadApiFileAsync(String path, String targetPath)
+        {
+            if (String.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException("API path must not be empty", nameof(path));
+            }
+
+            if (String.IsNullOrWhiteSpace(targetPath))
+            {
+                throw new ArgumentException("Target path must not be empty", nameof(targetPath));
+            }
+
+            await this._gatewayRequestLock.WaitAsync(this._lifetime.Token).ConfigureAwait(false);
+            try
+            {
+                var requestUri = new Uri(this._configuration.HttpBaseUri, path.StartsWith("/", StringComparison.Ordinal) ? path : $"/{path}");
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Get, requestUri);
+                this.ApplyAuthHeaders(httpRequest);
+                using var response = await this._httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead, this._lifetime.Token).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException($"HTTP {(Int32)response.StatusCode}");
+                }
+
+                var directory = Path.GetDirectoryName(targetPath);
+                if (!String.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                await using var responseStream = await response.Content.ReadAsStreamAsync(this._lifetime.Token).ConfigureAwait(false);
+                await using var fileStream = File.Create(targetPath);
+                await responseStream.CopyToAsync(fileStream, this._lifetime.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                this._gatewayRequestLock.Release();
+            }
         }
 
         public async Task<IReadOnlyList<String>> GetSchemaEnumOptionsAsync(String key, IReadOnlyList<String> fallback)

@@ -11,5 +11,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
         public String Type { get; init; }
 
         public String Description { get; init; }
+
+        public String Mtime { get; init; }
+
+        public String LocalPath { get; set; }
     }
 }

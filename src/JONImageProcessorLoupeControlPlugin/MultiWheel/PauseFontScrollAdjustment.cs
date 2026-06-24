@@ -52,7 +52,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
 
             try
             {
-                this.SetFonts(await this._pauseControl.ListFontsAsync().ConfigureAwait(false), this._pauseControl.Font);
+                var fonts = await this._pauseControl.ListFontsAsync().ConfigureAwait(false);
+                await this.DownloadPreviewFontsAsync(fonts).ConfigureAwait(false);
+                this.SetFonts(fonts, this._pauseControl.Font);
             }
             catch (Exception ex)
             {
@@ -129,14 +131,14 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
                     ? "No Fonts"
                     : font.Name;
             var indexText = count > 0 ? $"{index + 1}/{count}" : "";
-            var previewFont = CreatePreviewFont(font, 76, FontStyle.Regular);
+            var previewFont = CreatePreviewFont(font, 76);
             var indexFont = SystemFonts.CreateFont("Arial", 44, FontStyle.Bold);
             var labelFont = SystemFonts.CreateFont("Arial", 24, FontStyle.Regular);
             var maxTextWidth = WheelCanvasSize - 56;
             var previewText = TrimToWidth(displayText, previewFont, maxTextWidth);
             var previewSize = TextMeasurer.MeasureSize(previewText, new TextOptions(previewFont));
             var indexSize = TextMeasurer.MeasureSize(indexText, new TextOptions(indexFont));
-            var typeText = font?.Type ?? "";
+            var typeText = GetTypeText(font);
             var typeSize = TextMeasurer.MeasureSize(typeText, new TextOptions(labelFont));
             var totalHeight = previewSize.Height + 18 + indexSize.Height + (String.IsNullOrWhiteSpace(typeText) ? 0 : 12 + typeSize.Height);
             var y = (WheelCanvasSize - totalHeight) / 2f;
@@ -268,15 +270,67 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
             }
         }
 
-        private static Font CreatePreviewFont(JonAssetSummary font, Single size, FontStyle style)
+        private async Task DownloadPreviewFontsAsync(IReadOnlyList<JonAssetSummary> fonts)
         {
-            var candidates = new[]
+            if (fonts == null)
             {
-                font?.Id,
-                font?.Name,
-                "Arial"
-            };
+                return;
+            }
 
+            foreach (var font in fonts.Where(item => item?.Type?.Equals("Built-in", StringComparison.OrdinalIgnoreCase) != true))
+            {
+                try
+                {
+                    font.LocalPath = await this._pauseControl.DownloadFontAsync(font).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    PluginLog.Warning($"[PauseFontScrollAdjustment] font download '{font.Name}' failed: {ex.Message}");
+                }
+            }
+        }
+
+        private static Font CreatePreviewFont(JonAssetSummary font, Single size)
+        {
+            if (font == null)
+            {
+                return CreateFirstAvailableFont(size, FontStyle.Regular, "Arial");
+            }
+
+            if (!String.IsNullOrWhiteSpace(font.LocalPath) && File.Exists(font.LocalPath))
+            {
+                try
+                {
+                    var collection = new FontCollection();
+                    var family = collection.Add(font.LocalPath);
+                    return family.CreateFont(size, FontStyle.Regular);
+                }
+                catch
+                {
+                }
+            }
+
+            if (font.Type?.Equals("Built-in", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return font.Id switch
+                {
+                    "plain" => CreateFirstAvailableFont(size, FontStyle.Regular, "Arial", "Helvetica"),
+                    "simplex" => CreateFirstAvailableFont(size, FontStyle.Italic, "Arial", "Helvetica"),
+                    "duplex" => CreateFirstAvailableFont(size, FontStyle.Bold, "Arial", "Helvetica"),
+                    "complex" => CreateFirstAvailableFont(size, FontStyle.Regular, "Times New Roman", "Times", "Georgia", "Arial"),
+                    "triplex" => CreateFirstAvailableFont(size, FontStyle.Bold, "Times New Roman", "Times", "Georgia", "Arial"),
+                    "complex-small" => CreateFirstAvailableFont(size * 0.82f, FontStyle.Regular, "Times New Roman", "Times", "Georgia", "Arial"),
+                    "script-simplex" => CreateFirstAvailableFont(size, FontStyle.Italic, "Brush Script MT", "Comic Sans MS", "Arial"),
+                    "script-complex" => CreateFirstAvailableFont(size, FontStyle.Italic, "Brush Script MT", "Comic Sans MS", "Arial"),
+                    _ => CreateFirstAvailableFont(size, FontStyle.Regular, "Arial", "Helvetica")
+                };
+            }
+
+            return CreateFirstAvailableFont(size, FontStyle.Regular, font.Id, font.Name, "Arial", "Helvetica");
+        }
+
+        private static Font CreateFirstAvailableFont(Single size, FontStyle style, params String[] candidates)
+        {
             foreach (var candidate in candidates)
             {
                 if (String.IsNullOrWhiteSpace(candidate))
@@ -293,7 +347,22 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel
                 }
             }
 
-            return SystemFonts.CreateFont("Arial", size, style);
+            return SystemFonts.CreateFont("Arial", size, FontStyle.Regular);
+        }
+
+        private static String GetTypeText(JonAssetSummary font)
+        {
+            if (font == null)
+            {
+                return "";
+            }
+
+            if (font.Type?.Equals("Built-in", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return "OpenCV built-in";
+            }
+
+            return String.IsNullOrWhiteSpace(font.Type) ? "Gateway font" : $"{font.Type} preview";
         }
 
         private static String TrimToWidth(String text, Font font, Single maxWidth)
