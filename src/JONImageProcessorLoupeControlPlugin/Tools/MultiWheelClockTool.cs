@@ -62,10 +62,19 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Tools
             {
                 if (activeDisplay is IMultiWheelRenderedDisplayable renderedDisplay)
                 {
-                    var renderedImage = renderedDisplay.RenderDisplayImage();
-                    if (renderedImage != null)
+                    try
                     {
-                        return renderedImage;
+                        var renderedImage = renderedDisplay.RenderDisplayImage();
+                        if (renderedImage != null)
+                        {
+                            bitmapBuilder.FillRectangle(0, 0, 512, 512, BitmapColor.Black);
+                            bitmapBuilder.SetBackgroundImage(renderedImage);
+                            return bitmapBuilder.ToImage();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PluginLog.Warning($"[MultiWheelClockTool] rendered display failed: {ex.Message}");
                     }
                 }
 
