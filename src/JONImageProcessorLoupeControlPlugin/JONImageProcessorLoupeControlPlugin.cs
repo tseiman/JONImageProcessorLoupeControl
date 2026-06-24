@@ -9,6 +9,7 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.Helpers;
     using Loupedeck.JONImageProcessorLoupeControlPlugin.MultiWheel;
+    using Loupedeck.JONImageProcessorLoupeControlPlugin.Pause;
     using LoupedeckWebConfigLib;
 
     public class JONImageProcessorLoupeControlPlugin : Plugin
@@ -31,7 +32,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
 
         internal static JonBackgroundControl BackgroundControl { get; private set; } = new(GatewayClient);
 
+        internal static JonPauseControl PauseControl { get; private set; } = new(GatewayClient);
+
         internal static BackgroundColorDraftState BackgroundColorDraftState { get; private set; } = new();
+
+        internal static PauseTextColorDraftState PauseTextColorDraftState { get; private set; } = new();
 
         internal static event Action PluginReady;
 
@@ -49,7 +54,9 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             PresetControl = new JonPresetControl(GatewayClient);
             MaskControl = new JonMaskControl(GatewayClient);
             BackgroundControl = new JonBackgroundControl(GatewayClient);
+            PauseControl = new JonPauseControl(GatewayClient);
             BackgroundColorDraftState = new BackgroundColorDraftState();
+            PauseTextColorDraftState = new PauseTextColorDraftState();
             this.RegisterServices();
             var configuration = this.LoadGatewayConfiguration();
             this.ConfigureWebConfig(configuration);
@@ -77,10 +84,15 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             ServiceDirectory.Register(PresetControl);
             ServiceDirectory.Register(MaskControl);
             ServiceDirectory.Register(BackgroundControl);
+            ServiceDirectory.Register(PauseControl);
             ServiceDirectory.Register(BackgroundColorDraftState);
+            ServiceDirectory.Register(PauseTextColorDraftState);
             ServiceDirectory.Register(new PresetScrollAdjustment(PresetControl));
             ServiceDirectory.Register(new BackgroundAssetScrollAdjustment(BackgroundControl));
+            ServiceDirectory.Register(new PauseAssetScrollAdjustment(PauseControl));
+            ServiceDirectory.Register(new PauseFontScrollAdjustment(PauseControl));
             BackgroundColorDraftState.Attach(BackgroundControl);
+            PauseTextColorDraftState.Attach(PauseControl);
         }
 
         private void ConfigureWebConfig(JonGatewayConfiguration configuration)

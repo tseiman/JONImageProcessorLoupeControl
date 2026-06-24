@@ -15,8 +15,11 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
         public static readonly Type T_JonPresetControl = typeof(JonPresetControl);
         public static readonly Type T_JonMaskControl = typeof(JonMaskControl);
         public static readonly Type T_JonBackgroundControl = typeof(JonBackgroundControl);
+        public static readonly Type T_JonPauseControl = typeof(JonPauseControl);
         public static readonly Type T_PresetScrollAdjustment = typeof(PresetScrollAdjustment);
         public static readonly Type T_BackgroundAssetScrollAdjustment = typeof(BackgroundAssetScrollAdjustment);
+        public static readonly Type T_PauseAssetScrollAdjustment = typeof(PauseAssetScrollAdjustment);
+        public static readonly Type T_PauseFontScrollAdjustment = typeof(PauseFontScrollAdjustment);
 
         private static readonly Dictionary<Type, Object> Services = new();
 

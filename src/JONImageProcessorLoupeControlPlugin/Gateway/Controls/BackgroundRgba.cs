@@ -29,6 +29,26 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin.Gateway.Controls
 
         public String ToHex() => $"{this.R:x2}{this.G:x2}{this.B:x2}{this.A:x2}";
 
+        public static BackgroundRgba FromHex(String hex, BackgroundRgba fallback)
+        {
+            var value = (hex ?? "").Trim();
+            if (value.StartsWith("#", StringComparison.Ordinal))
+            {
+                value = value[1..];
+            }
+
+            if (value.Length != 8
+                || !Int32.TryParse(value[..2], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r)
+                || !Int32.TryParse(value.Substring(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g)
+                || !Int32.TryParse(value.Substring(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b)
+                || !Int32.TryParse(value.Substring(6, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var a))
+            {
+                return fallback;
+            }
+
+            return new BackgroundRgba(r, g, b, a);
+        }
+
         public static BackgroundRgba From(String rgb, Double alpha)
         {
             var parts = (rgb ?? "").Split(',');
