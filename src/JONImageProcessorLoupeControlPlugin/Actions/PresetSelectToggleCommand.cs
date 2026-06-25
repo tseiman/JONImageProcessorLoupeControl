@@ -62,7 +62,6 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
             else
             {
                 this._keepActiveAfterCompletion = false;
-                this._fnState?.Disable();
                 this._multiWheelDispatch?.InformInActive(this);
             }
 

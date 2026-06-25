@@ -73,6 +73,12 @@ namespace Loupedeck.JONImageProcessorLoupeControlPlugin
                 disposableBlinkenLightsTimeSource.Dispose();
             }
 
+            if (ServiceDirectory.TryGet(ServiceDirectory.T_MultiWheelFnState, out var multiWheelFnState)
+                && multiWheelFnState is IDisposable disposableMultiWheelFnState)
+            {
+                disposableMultiWheelFnState.Dispose();
+            }
+
             GatewayClient.Dispose();
         }
 
